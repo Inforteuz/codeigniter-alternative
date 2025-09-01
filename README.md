@@ -28,7 +28,6 @@ Set up the .env file:
 
 Rename .env.example to .env and configure your environment:
 ```env
-Копировать код
 APP_NAME=MyApp
 APP_ENV=development
 APP_DEBUG=true
