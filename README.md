@@ -25,8 +25,8 @@ A modern PHP MVC framework built with CodeIgniter 4 style architecture. Designed
 
 1. **Clone the repository**
 ```bash
-git clone https://github.com/username/php-mvc-framework.git
-cd php-mvc-framework
+git clone https://github.com/Inforteuz/codeigniter-alternative.git
+cd php-codeigniter-alternative
 ```
 
 2. **Setup environment file**
