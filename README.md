@@ -23,7 +23,7 @@ A lightweight and modern MVC framework inspired by CodeIgniter 4, built from scr
 1. **Clone the repository:**
 
    ```bash
-   git clone https://github.com/yourname/your-framework.git
+   git clone https://github.com/Inforteuz/codeigniter-alternative.git
 Set up the .env file:
 
 Rename .env.example to .env and configure your environment:
