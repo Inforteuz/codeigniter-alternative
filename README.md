@@ -27,8 +27,7 @@ A lightweight and modern MVC framework inspired by CodeIgniter 4, built from scr
 Set up the .env file:
 
 Rename .env.example to .env and configure your environment:
-
-env
+```env
 Копировать код
 APP_NAME=MyApp
 APP_ENV=development
@@ -43,15 +42,10 @@ Create your database.
 Run migrations:
 
 Visit:
-
-arduino
-Копировать код
 http://localhost/migrate
 This will automatically create the necessary tables.
 
 📁 Folder Structure
-pgsql
-Копировать код
 project/
 ├── app/
 │   ├── Controllers/        # Application logic (e.g., HomeController.php)
