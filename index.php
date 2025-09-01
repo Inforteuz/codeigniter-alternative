@@ -8,33 +8,38 @@
  * Framework Version: 1.0.0
  * Framework Name: CodeIgniter Alternative
  * 
- * Ushbu fayl framework'ning kirish nuqtasi (entry point) hisoblanadi.
- * Bu yerda barcha kelayotgan so'rovlar marshrutlash tizimi (Router)
- * orqali tegishli controller yoki funksiyaga yo'naltiriladi.
+ * This file serves as the entry point of the framework.
+ * Here, all incoming requests are routed through the Router
+ * system to the appropriate controller or function.
  * 
- * Framework haqida:
- * CodeIgniter Alternative - bu CodeIgniterga muqobil yengil va
- * tezkor PHP MVC framework bo'lib, sizning loyihalaringizni 
- * yanada sodda va tartibli qilish uchun mo'ljallangan.
+ * About the framework:
+ * CodeIgniter Alternative is a lightweight and fast PHP MVC framework
+ * as an alternative to CodeIgniter, designed to make your projects
+ * simpler and more organized.
  * 
- * Barcha huquqlar himoyalangan © Oyatillo, 2024
+ * All rights reserved © Oyatillo, 2024
  * =========================================================
  */
 
-// Autoloader'ni yuklash, bu orqali sinflar avtomatik ravishda yuklanadi
 require_once 'autoloader.php';
 require_once 'app/Controllers/MigrateController.php';
 
-// 'System' namespacedan Router sinfini chaqirish
+use System\Core\Env;
+use System\Core\Debug;
 use System\Router;
+use System\ErrorHandler;
 
-// Migratsiyani ishga tushurish
+Env::load();
+
+if (Env::get('APP_DEBUG') === 'true') {
+    Debug::init();
+} else {
+    ErrorHandler::register();
+}
+
 $migrateController = new \App\Controllers\MigrateController();
-$migrateController->migrate();  // Migratsiyani bajaramiz
+$migrateController->migrate(); 
 
-// Migratsiyani bekor qilish uchun (rollback) $migration->down();
-
-// Router obyektini yaratish va foydalanuvchidan kelgan so'rovga mos ravishda marshrutlashni amalga oshirish
 $router = new Router();
 $router->handleRequest();
 ?>

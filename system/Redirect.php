@@ -3,30 +3,30 @@
 /**
  * Redirect.php
  *
- * Ushbu fayl URL'ga yo'naltirishni boshqarish uchun ishlatiladi. `Redirect` sinfi
- * foydalanuvchini boshqa sahifaga yo'naltirish uchun kerakli metodlarni taqdim etadi.
+ * This file contains the Redirect class, which handles URL redirection.
+ * It provides simple methods to redirect users to a different location.
  *
  * @package    CodeIgniter Alternative
  * @subpackage System
  * @version    1.0.0
  * @date       2024-12-01
  *
- * @description
- * `Redirect` sinfi URL'ga yo'naltirishni amalga oshiradi.
+ * Description:
+ * The `Redirect` class offers basic functionality for sending HTTP redirects.
  *
- * 1. **To'liq URL'ga yo'naltirish**:
- *    - `to($url)` metodi orqali foydalanuvchini to'liq URL'ga yo'naltiradi.
- *    - URL sifatida to'liq manzil (http:// yoki https://) va yo'nalishni kiritish kerak.
+ * 1. **Redirecting to a full URL**:
+ *    - The `to($url)` method redirects the user to the specified URL.
+ *    - The provided URL should be absolute (starting with http:// or https://).
  *
  * @class Redirect
  *
  * @methods
- * - `to($url)`: Foydalanuvchini ko'rsatilgan URL'ga yo'naltiradi va dasturni to'xtatadi.
+ * - `to($url)`: Sends a redirect to the given URL and stops further execution.
  *
  * @example
  * ```php
  * $redirect = new \System\Redirect();
- * $redirect->to("http://example.com");
+ * $redirect->to("https://example.com");
  * ```
  */
 
@@ -35,9 +35,11 @@ namespace System;
 class Redirect
 {
     /**
-     * To'liq URL'ga yo'naltirish
+     * Redirects the user to a given full URL
+     *
+     * @param string $url The destination URL (should be absolute)
+     * @return void
      */
-    
     public function to($url)
     {
         header("Location: {$url}");

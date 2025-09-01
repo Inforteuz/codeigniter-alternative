@@ -1,0 +1,9 @@
+# Environment
+.env
+
+# IDE configs
+.idea/
+
+# OS-specific
+.DS_Store
+Thumbs.db

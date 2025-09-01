@@ -2,39 +2,39 @@
 
 /*
 |--------------------------------------------------------------------------
-| Autoloader skripti
+| Autoloader script
 |--------------------------------------------------------------------------
-| Ushbu fayl CodeIgniter Alternative frameworkining asosiy yuklovchi mexanizmi
-| bo'lib, sinflarni avtomatik yuklash funksiyasini amalga oshiradi. Bu esa
-| qo'lda sinflarni birma-bir yuklash zaruratini yo'q qiladi.
+| This file is the main autoload mechanism of the CodeIgniter Alternative framework,
+| implementing the automatic class loading function. This eliminates the need
+| to manually include classes one by one.
 | 
-| Loyihada dastlab sinflar "App" va "System" namespacelariga asoslangan
-| holda tartiblangan. Shu sababli autoloader sinflarni belgilangan papkalar
-| (app/ va system/) ichidan qidiradi.
+| In the project, classes are initially organized based on the "App" and "System" namespaces.
+| Therefore, the autoloader searches for classes inside the specified folders
+| (app/ and system/).
 |
 | Framework: CodeIgniter Alternative v1.0
-| Muallif: Oyatillo
-| PHP versiya talabi: 8.1.9 yoki undan yuqori
+| Author: Oyatillo
+| PHP version requirement: 8.1.9 or higher
 */
 
 if (version_compare(PHP_VERSION, '8.1.9', '<')) {
-    // PHP versiyasi mos kelmasa xatolik chiqaradi va ishni to'xtatadi
-    die("Ushbu framework faqat PHP 8.1 yoki undan yuqori versiyada ishlaydi. Sizning PHP versiyangiz: " . PHP_VERSION);
+    // Throws an error and stops execution if PHP version is incompatible
+    die("This framework only works with PHP 8.1 or higher. Your PHP version is: " . PHP_VERSION);
     exit();
 }
 
 /*
 |--------------------------------------------------------------------------
-| Avtomatik yuklash funksiyasi
+| Autoload function
 |--------------------------------------------------------------------------
-| Ushbu funksiya namespace asosida sinflar joylashgan faylni avtomatik ravishda
-| topib, uni yuklaydi. Sinf "App" yoki "System" namespace’lari bilan boshlanadi.
+| This function automatically finds and loads the file where the class
+| is located based on its namespace. Classes start with "App" or "System" namespaces.
 | 
-| 1. Agar sinf "App\Controllers" yoki "App\Models" bo'lsa, tegishli papkadan
-|    yuklanadi (masalan, Controllers, Models).
-| 2. Agar sinf "System" namespaceiga tegishli bo'lsa, system papkasidan yuklanadi.
+| 1. If the class belongs to "App\Controllers" or "App\Models",
+|    it is loaded from the corresponding folder (e.g. Controllers, Models).
+| 2. If the class belongs to the "System" namespace, it is loaded from the system folder.
 | 
-| Bu yondashuv dasturda sinflarni yaxshi tartibda tashkil qilishga yordam beradi.
+| This approach helps to organize classes well in the application.
 */
 
 spl_autoload_register(function ($class) {
@@ -48,14 +48,14 @@ spl_autoload_register(function ($class) {
 
     // If the class is from the "App" namespace
     if (strncmp($appPrefix, $class, strlen($appPrefix)) === 0) {
-        // Get the class name after the namespace
+        // Get the class name after the namespace prefix
         $relativeClass = substr($class, strlen($appPrefix));
 
         if (strpos($relativeClass, "\\Controllers\\") === 0) {
-            // Create the path for the Controller file
+            // Build the path for the Controller file
             $file = $baseDirs[0] . "Controllers" . str_replace("\\", "/", substr($relativeClass, strlen("Controllers\\"))) . ".php";
         } elseif (strpos($relativeClass, "\\Models\\") === 0) {
-            // Create the path for the Model file
+            // Build the path for the Model file
             $file = $baseDirs[0] . "Models" . str_replace("\\", "/", substr($relativeClass, strlen("Models\\"))) . ".php";
         } else {
             // General path for other "App" classes

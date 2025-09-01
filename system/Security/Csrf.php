@@ -3,73 +3,75 @@
 namespace System\Security;
 
 /**
- * CSRF sinfi
+ * CSRF Class
  *
- * Ushbu sinf CSRF (Cross-Site Request Forgery) hujumlariga qarshi himoya qilish uchun
- * ishlatiladi. CSRF tokenlarini yaratish, tekshirish va saqlash funksiyalari taqdim etiladi.
+ * This class provides protection against CSRF (Cross-Site Request Forgery) attacks.
+ * It offers functions to generate, verify, and retrieve CSRF tokens.
  * 
- * CSRF token foydalanuvchi so'rovlarini tasdiqlash uchun ishlatiladi va tizimga noma'lum,
- * shubhali so'rovlarni oldini olishga yordam beradi.
+ * CSRF tokens are used to validate user requests and help prevent unauthorized
+ * or malicious requests from being processed by the system.
  *
- * @package    CodeIgniter Altenarnative
+ * @package    CodeIgniter Alternative
  * @subpackage System\Security
  * @version    1.0.0
  * @date       2024-12-01
  * 
  * @description
- * CSRF token yaratish, tekshirish va saqlashni amalga oshiruvchi funksiyalar.
+ * Handles creation, verification, and storage of CSRF tokens.
  *
  * 1. **generateToken()**:
- *    - Yangi CSRF tokenini yaratadi va uni sessiyada saqlaydi.
+ *    - Generates a new CSRF token and stores it in the session.
  *
  * 2. **verifyToken($token)**:
- *    - Kiruvchi tokenni sessiyadagi token bilan solishtirib tekshiradi va agar ular mos
- *      kelsa, tokenni sessiyadan olib tashlaydi va `true` qaytaradi. Aks holda `false` qaytaradi.
+ *    - Compares the incoming token with the one stored in the session.
+ *    - If they match, the token is removed from the session and returns `true`.
+ *    - Otherwise, it returns `false`.
  *
  * 3. **getToken()**:
- *    - Sessiyadagi CSRF tokenni qaytaradi. Agar mavjud bo'lsa, tokenni, aks holda `null` qaytaradi.
+ *    - Returns the CSRF token stored in the session, or `null` if none exists.
  *
  * @class Csrf
  *
  * @methods
- * - `generateToken()`: Yangi CSRF tokenini yaratadi va sessiyada saqlaydi.
- * - `verifyToken($token)`: Kiruvchi tokenni sessiyadagi token bilan taqqoslaydi.
- * - `getToken()`: Sessiyadagi CSRF tokenni qaytaradi.
+ * - `generateToken()`: Generates and stores a new CSRF token.
+ * - `verifyToken($token)`: Verifies the provided token against the session token.
+ * - `getToken()`: Retrieves the current CSRF token from the session.
  *
  * @example
  * ```php
- * // Yangi token yaratish
+ * // Generate a new token
  * $csrfToken = \System\Security\Csrf::generateToken();
  * 
- * // Tokenni tekshirish
+ * // Verify the token
  * if (\System\Security\Csrf::verifyToken($_POST['csrf_token'])) {
- *     // Token to'g'ri
+ *     // Token is valid
  * } else {
- *     // Token noto'g'ri
+ *     // Token is invalid
  * }
  * 
- * // Tokenni olish
+ * // Get the token
  * $token = \System\Security\Csrf::getToken();
  * ```
  */
 
 class Csrf {
     /**
-     * CSRF token yaratish va saqlash
+     * Generate and store a CSRF token
      */
     public static function generateToken(): string {
         if (session_status() === PHP_SESSION_NONE) {
             session_start();
         }
 
-        $token = bin2hex(random_bytes(32)); 
-        $_SESSION['csrf_token'] = $token; 
+        // Generate a 64-character (32 bytes) random token
+        $token = bin2hex(random_bytes(32));
+        $_SESSION['csrf_token'] = $token;
 
         return $token;
     }
 
     /**
-     * CSRF tokenni tekshirish
+     * Verify the provided CSRF token against the session token
      */
     public static function verifyToken(string $token): bool {
         if (session_status() === PHP_SESSION_NONE) {
@@ -77,6 +79,7 @@ class Csrf {
         }
 
         if (isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token)) {
+            // Token matches, remove it from session to prevent reuse
             unset($_SESSION['csrf_token']);
             return true;
         }
@@ -85,7 +88,7 @@ class Csrf {
     }
 
     /**
-     * CSRF tokenni olish
+     * Retrieve the CSRF token from the session
      */
     public static function getToken(): ?string {
         if (session_status() === PHP_SESSION_NONE) {

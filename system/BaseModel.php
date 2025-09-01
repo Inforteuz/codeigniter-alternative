@@ -3,41 +3,40 @@
 /**
  * BaseModel.php
  *
- * Ushbu fayl Custom MVC frameworkingiz uchun asosiy model sinfini taqdim etadi.
- * Ushbu sinf orqali barcha boshqa modellarga umumiy funksionallarni taqdim etish mumkin.
+ * This file contains the base model class for your custom MVC framework.
+ * It's meant to be extended by other models and includes shared functionality.
  *
  * @package    CodeIgniter Alternative
  * @subpackage System
- * @version    1.0.1
+ * @version    1.1.0
  * @date       2024-12-02
  *
- * @description
- * Ushbu sinf quyidagi asosiy funksiyalarni ta'minlaydi:
+ * Description:
+ * This class covers a few key things:
  *
- * 1. **Ma'lumotlar bazasi bilan bog'lanish**:
- *    - `__construct()` orqali Database obyektini ishga tushiradi.
- *    - Ushbu obyekt ma'lumotlar bazasi bilan oson ishlash uchun foydalaniladi.
+ * 1. **Database connection**:
+ *    - Sets up the database connection in the constructor.
+ *    - The $db object can be used to run queries easily.
  *
- * 2. **So'rovlar bajarish (Query Execution)**:
- *    - `query($sql, $params)` - SQL so'rovlari va parametrlar orqali ma'lumotlar bazasiga murojaat qiladi
- *      va natijani qaytaradi.
+ * 2. **Running queries**:
+ *    - `query($sql, $params)` – Runs raw SQL with optional parameters and returns the result.
  *
- * 3. **Log qilish**:
- *    - `logError($message)` - ma'lumotlar bazasi yoki boshqa xatoliklarni log fayliga yozish imkonini beradi.
+ * 3. **Logging errors**:
+ *    - `logError($message)` – Logs DB-related or general errors to a log file.
  *
- * 4. **Jadval yaratish**:
- *    - `createTableIfNotExists($tableName, $schema)` - Jadval mavjud bo'lmasa, uni yaratadi.
+ * 4. **Creating tables**:
+ *    - `createTableIfNotExists($tableName, $schema)` – Creates a DB table if it doesn’t already exist.
  *
  * @class BaseModel
  *
  * @methods
- * - `__construct()`: Sinf obyektini ishga tushirish va ma'lumotlar bazasi ulanishini o'rnatish.
- * - `query($sql, $params)`: Ma'lumotlar bazasiga SQL so'rovini yuborish va natijalarni olish.
- * - `logError($message)`: Xatoliklarni loglash uchun maxsus funksiya.
- * - `createTableIfNotExists($tableName, $schema)`: Jadvalni yaratish.
+ * - `__construct()`: Initializes the model and sets up DB connection.
+ * - `query($sql, $params)`: Executes an SQL query and returns the result.
+ * - `logError($message)`: Logs errors for debugging or system monitoring.
+ * - `createTableIfNotExists($tableName, $schema)`: Creates a new table if it’s not in the DB.
  *
  * @properties
- * - `$db`: Database sinfidan obyekt, ma'lumotlar bazasi bilan o'zaro ishlash uchun ishlatiladi.
+ * - `$db`: Holds the database object for running queries.
  *
  * @example
  * ```php
@@ -52,15 +51,23 @@
  * ```
  */
 
+
 namespace System;
+
+use System\Database\Database;
 
 class BaseModel
 {
     protected $db;
+    protected $table;
+    protected $lastWhere = '';
+    protected $lastParams = [];
+    protected $lastOrder = '';
+    protected $lastLimit = '';
 
     public function __construct()
     {
-        $this->db = new Database();
+        $this->db = Database::getInstance();
     }
 
     /**
@@ -98,7 +105,6 @@ class BaseModel
      * @param array $params
      * @return PDOStatement
      */
-
     public function prepare($sql, $params = [])
     {
         try {
@@ -123,7 +129,7 @@ class BaseModel
 
         $sql = "INSERT INTO {$table} ({$columns}) VALUES ({$placeholders})";
 
-        $stmt = $this->prepare($sql, $data);
+        $stmt = $this->prepare($sql);
 
         try {
             return $stmt->execute($data);
@@ -132,6 +138,7 @@ class BaseModel
             return false;
         }
     }
+
     /**
      * Find a single record by ID.
      *
@@ -143,8 +150,10 @@ class BaseModel
     {
         $sql = "SELECT * FROM {$table} WHERE id = :id LIMIT 1";
         $params = ['id' => $id];
-        $result = $this->prepare($sql, $params);
-        return $result[0] ?? null;
+        $stmt = $this->prepare($sql);
+        $stmt->execute($params);
+        $result = $stmt->fetch(\PDO::FETCH_ASSOC);
+        return $result ?: null;
     }
 
     /**
@@ -167,7 +176,7 @@ class BaseModel
             array_values($conditions)
         ));
 
-        $stmt = $this->prepare($sql, $params);
+        $stmt = $this->prepare($sql);
 
         try {
             return $stmt->execute($params);
@@ -189,7 +198,7 @@ class BaseModel
         $whereClause = implode(" AND ", array_map(fn($key) => "{$key} = :{$key}", array_keys($conditions)));
         $sql = "DELETE FROM {$table} WHERE {$whereClause}";
 
-        $stmt = $this->prepare($sql, $conditions);
+        $stmt = $this->prepare($sql);
 
         try {
             return $stmt->execute($conditions);
@@ -211,7 +220,7 @@ class BaseModel
         $whereClause = implode(" AND ", array_map(fn($key) => "{$key} = :{$key}", array_keys($conditions)));
         $sql = "SELECT COUNT(*) as count FROM {$table} WHERE {$whereClause}";
 
-        $stmt = $this->prepare($sql, $conditions);
+        $stmt = $this->prepare($sql);
 
         try {
             $stmt->execute($conditions);
@@ -238,7 +247,7 @@ class BaseModel
 
         $sql = "SELECT COUNT(*) as count FROM {$table} {$whereClause}";
 
-        $stmt = $this->prepare($sql, $conditions);
+        $stmt = $this->prepare($sql);
 
         try {
             $stmt->execute($conditions);
@@ -262,7 +271,7 @@ class BaseModel
     {
         $sql = "SELECT * FROM {$table} LIMIT :limit OFFSET :offset";
 
-        $stmt = $this->prepare($sql, ['limit' => $limit, 'offset' => $offset]);
+        $stmt = $this->prepare($sql);
 
         try {
             $stmt->bindParam(':limit', $limit, \PDO::PARAM_INT);
@@ -307,9 +316,97 @@ class BaseModel
             $createTableSQL = "CREATE TABLE IF NOT EXISTS {$tableName} ({$schema}) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;";
 
             $this->query($createTableSQL);
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
             $this->logError("Jadvalni yaratishda xatolik: {$e->getMessage()}");
         }
+    }
+
+    /**
+     * Where condition for query builder
+     *
+     * @param array $conditions
+     * @return self
+     */
+    public function where($conditions = [])
+    {
+        $whereClause = '';
+        $params = [];
+        
+        if (!empty($conditions)) {
+            $whereParts = [];
+            foreach ($conditions as $field => $value) {
+                $whereParts[] = "{$field} = :{$field}";
+                $params[$field] = $value;
+            }
+            $whereClause = "WHERE " . implode(" AND ", $whereParts);
+        }
+        
+        $this->lastWhere = $whereClause;
+        $this->lastParams = $params;
+        
+        return $this;
+    }
+
+    /**
+     * Order by for query builder
+     *
+     * @param string $field
+     * @param string $direction
+     * @return self
+     */
+    public function orderBy($field, $direction = 'ASC')
+    {
+        $this->lastOrder = "ORDER BY {$field} {$direction}";
+        return $this;
+    }
+
+    /**
+     * Limit for query builder
+     *
+     * @param int $limit
+     * @param int $offset
+     * @return self
+     */
+    public function limit($limit, $offset = 0)
+    {
+        $this->lastLimit = "LIMIT {$limit} OFFSET {$offset}";
+        return $this;
+    }
+
+    /**
+     * Get first record
+     *
+     * @return array|null
+     */
+    public function first()
+    {
+        $sql = "SELECT * FROM {$this->table} {$this->lastWhere} {$this->lastOrder} LIMIT 1";
+        $result = $this->query($sql, $this->lastParams);
+        return $result[0] ?? null;
+    }
+
+    /**
+     * Get all records
+     *
+     * @return array
+     */
+    public function get()
+    {
+        $sql = "SELECT * FROM {$this->table} {$this->lastWhere} {$this->lastOrder} {$this->lastLimit}";
+        return $this->query($sql, $this->lastParams);
+    }
+
+    /**
+     * Get all records from table
+     *
+     * @param string $table
+     * @return array
+     */
+    public function all($table = null)
+    {
+        $table = $table ?: $this->table;
+        $sql = "SELECT * FROM {$table}";
+        return $this->query($sql);
     }
     
     /**
@@ -317,31 +414,17 @@ class BaseModel
      *
      * This function inserts the default super admin user into the "users" table.
      * User information is predetermined and the password is stored as hashed.
-     
+     */
     public function createUser()
     {
         $data = [
             "id" => 1,
             "user_id" => "USER-67485ced924fb",
-            "fullname" => "Super Admin",
-            "middlename" => "XXX",
-            "login" => "admin",
-            "password" =>
-                '$2y$10$pXh1xJb6XISaC94yYHtcauQ12Mp0MZOOV71bvmz/jBKU6kTfhpluW', //admin123 (hashlangan)
-            "gender" => "Erkak",
-            "passportSeries" => "AC1475293",
-            "pnifl" => "36556247564",
-            "speciality_name" => "Dasturchi",
-            "speciality_number" => "777",
-            "degree" => "Administrator",
-            "image_url" => "assets/uploads/USER-67485ced924fb/admin.jpg",
-            "role" => "admin",
-            "status" => "active",
-            "created_at" => "2024-11-23 16:45:44",
+            // ...
         ];
 
         $this->insert("users", $data);
-    } */
+    } 
 }
 
 ?>

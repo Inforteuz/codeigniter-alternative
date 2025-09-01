@@ -3,16 +3,16 @@
 /**
  * UserController.php
  *
- * Bu fayl PHP framework'ida foydalanuvchi (user) bilan bog'liq amallarni bajarish uchun mo'ljallangan.
- * Foydalanuvchi ma'lumotlarini olish, qo'shish, yangilash va o'chirish kabi funksiyalarni o'z ichiga oladi.
- * Ushbu model `users` jadvali bilan bog'liq bo'lib, foydalanuvchi malumotlarini saqlash va qayta ishlashda ishlatiladi.
+ * This file is designed to perform actions related to the user (user) in the PHP framework.
+ * Includes functions such as retrieving, adding, updating and deleting user information.
+ * This model is associated with the `users` table and is used to store and process user data.
  *
  * @package    CodeIgniter Alternative
  * @subpackage Models
  * @author     Oyatillo
  * @version    1.0.0
  * @date       2024-12-01
- * */
+ */
 namespace App\Controllers;
 
 use App\Models\UserModel;
@@ -21,21 +21,5 @@ use PDO;
 
 class UserController extends BaseController
 {
-    public function tasks()
-    {
-
-        $id = $_GET['id'] ?? null;
-        $user = $_GET['user'] ?? null;  
-
-        if ($id) {
-            echo "Task method called with id: " . $id . "<br>";
-            echo "Task method called with user: " . $user;
-            $this->dd($user);
-        } else {
-            echo "No ID parameter provided.";
-        }
-    }
-    
-}
-
+  // ...
 ?>
