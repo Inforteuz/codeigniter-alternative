@@ -495,22 +495,19 @@
             }
         }
         
-        // Avtomatik yopish/qochish funksiyasi
         document.addEventListener('DOMContentLoaded', function() {
-            // Barcha sectionlarni yopish
             const allHeaders = document.querySelectorAll('.section-header');
             allHeaders.forEach(header => {
                 if (!header.nextElementSibling.classList.contains('active')) {
                     header.click();
                 }
             });
-            
-            // Agar xatolar mavjud bo'lsa, ularni ochiq qoldirish
+        
             const errorSection = document.querySelector('.error-item');
             if (errorSection) {
                 const errorHeader = document.querySelector('.debug-section:first-child .section-header');
                 if (errorHeader) {
-                    errorHeader.click(); // Yopilgan bo'lsa ochish
+                    errorHeader.click();
                 }
             }
         });
