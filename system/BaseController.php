@@ -1,65 +1,46 @@
 <?php
-
 /**
  * BaseController.php
  *
- * This file provides a base controller class that provides common functionality and basic capabilities for creating other controllers
+ * This file provides the enhanced base controller class with CodeIgniter 4 inspired features.
+ * It serves as the foundation for all other controllers with extended functionality.
+ *
  * @package    CodeIgniter Alternative
  * @subpackage System
- * @version    1.0.0
- * @date       2024-12-01
- * 
-* @description
-* This class performs the following main functions:
-*
-* 1. **Session Management**:
-* - Automatically starts a session when the class is started.
-* 
-* 2. **Redirect**:
-* - `to($url)` - redirects the user to the given URL.
-* - `base_url($path)` - appends a relative path to the base URL of the site.
-* 
-* 3. **Message Filtering**:
-* - `filterMessage($message)` - removes special characters to secure the data entered by the user.
-*
-* 4. **Logging**:
-* - `logError($message)` - stores errors that occurred in the system in the daily log files.
-*
-* 5. **Load View**:
-* - `view($view, $data)` - loads the given view file and passes data to it.
-* - If the view file is not found, it will show a 500 error page.
-*
-* 6. **Show errors**:
-* - `showError($title, $message)` - shows a nice error page to the user.
-* - `show404()` - returns a 404 error (page not found) page.
-* - `show500($message)` - returns a 500 error (internal server error) page.
-*
-* 7. **Generate unique user ID**:
-* - `generateUserId()` - generates a unique and random ID for each user.
-*
-* @class BaseController
- * 
-* @methods
-* - `__construct()`: Initialize the class and start the session.
-* - `to($url)`: Redirect the user to another URL.
-* - `redirect()`: Return a ready-made object for redirection (chainable redirect).
-* - `base_url($path)`: Create a path relative to the base URL of the site.
-* - `filterMessage($message)`: Transform the entered data into a secure form.
-* - `logError($message)`: Write system errors to the log file.
-* - `view($view, $data)`: Load the view file and transfer data.
-* - `showError($title, $message)`: Show an error page to the user.
-* - `show404()`: Show a 404 error page.
-* - `show500($message)`: Show the 500 error page.
-* - `generateUserId()`: Generate a unique user ID.
-* - `showDebugInfo()`: Show the Debug page.
-* - `getMemoryUsage()`: Get memory usage information.
-* - `getExecutionTime()`: Get execution time information.
-*
-* This class serves as the base for all controllers in your MVC framework.
-*/
-
+ * @version    2.0.0
+ * @date       2025-01-01
+ *
+ * @description
+ * Enhanced functionality includes:
+ *
+ * 1. **Request & Response Handling**:
+ *    - Enhanced input methods with validation
+ *    - Response formatting and status code management
+ *    - Header management utilities
+ *
+ * 2. **Model & Helper Loading**:
+ *    - Dynamic model loading and caching
+ *    - Helper function loading system
+ *
+ * 3. **Advanced Validation**:
+ *    - Rule-based validation system
+ *    - Custom validation rules
+ *    - Validation error handling
+ *
+ * 4. **Cookie & Session Management**:
+ *    - Secure cookie handling
+ *    - Enhanced session utilities
+ *
+ * 5. **URL & Routing Helpers**:
+ *    - URL generation and manipulation
+ *    - Route parameter handling
+ *
+ * 6. **Security Features**:
+ *    - CSRF token management
+ *    - XSS protection
+ *    - SQL injection prevention
+ */
 namespace System;
-
 use System\Core\Env;
 use System\Database\Database;
 use System\Core\Debug;
@@ -67,17 +48,747 @@ use System\Core\Debug;
 class BaseController
 {
     protected $db;
+    protected $base_url;
+    protected $models = [];
+    protected $helpers = [];
+    protected $request = [];
+    protected $validationRules = [];
+    protected $validationErrors = [];
 
     public function __construct()
     {
         if (session_status() === PHP_SESSION_NONE) {
             session_start();
         }
-        
         Env::load();
-        
         $this->db = Database::getInstance();
+        $this->base_url = $this->getBaseUrl();
+        $this->initializeRequest();
+        $this->initializeCSRF();
     }
+
+    /**
+     * Initialize request data
+     */
+    private function initializeRequest()
+    {
+        $this->request = [
+            'method' => $_SERVER['REQUEST_METHOD'] ?? 'GET',
+            'uri' => $_SERVER['REQUEST_URI'] ?? '',
+            'get' => $_GET,
+            'post' => $_POST,
+            'files' => $_FILES,
+            'headers' => getallheaders() ?: [],
+            'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? '',
+            'ip_address' => $this->getClientIpAddress()
+        ];
+    }
+
+    /**
+     * Initialize CSRF protection
+     */
+    private function initializeCSRF()
+    {
+        if (!isset($_SESSION['csrf_token'])) {
+            $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+        }
+    }
+
+    // ===== REQUEST METHODS =====
+
+    /**
+     * Get request method
+     * @return string
+     */
+    public function getMethod()
+    {
+        return $this->request['method'];
+    }
+
+    /**
+     * Check if request method matches
+     * @param string $method
+     * @return bool
+     */
+    public function isMethod($method)
+    {
+        return strtoupper($this->request['method']) === strtoupper($method);
+    }
+
+    /**
+     * Get all POST data or specific key
+     * @param string|null $key
+     * @param mixed $default
+     * @return mixed
+     */
+    public function getPost($key = null, $default = null)
+    {
+        if ($key === null) {
+            return $_POST;
+        }
+        return $_POST[$key] ?? $default;
+    }
+
+    /**
+     * Get all GET data or specific key
+     * @param string|null $key
+     * @param mixed $default
+     * @return mixed
+     */
+    public function getGet($key = null, $default = null)
+    {
+        if ($key === null) {
+            return $_GET;
+        }
+        return $_GET[$key] ?? $default;
+    }
+
+    /**
+     * Get input data from any method (GET, POST, PUT, etc.)
+     * @param string $key
+     * @param mixed $default
+     * @return mixed
+     */
+    public function getVar($key, $default = null)
+    {
+        // Check POST first
+        if (isset($_POST[$key])) {
+            return $_POST[$key];
+        }
+        
+        // Then GET
+        if (isset($_GET[$key])) {
+            return $_GET[$key];
+        }
+        
+        // Then php://input for PUT, PATCH, DELETE
+        $input = json_decode(file_get_contents('php://input'), true);
+        if (is_array($input) && isset($input[$key])) {
+            return $input[$key];
+        }
+        
+        return $default;
+    }
+
+    /**
+     * Get JSON input data
+     * @param bool $assoc
+     * @return mixed
+     */
+    public function getJSON($assoc = true)
+    {
+        $input = file_get_contents('php://input');
+        return json_decode($input, $assoc);
+    }
+
+    /**
+     * Get client IP address
+     * @return string
+     */
+    public function getClientIpAddress()
+    {
+        $ipKeys = ['HTTP_CLIENT_IP', 'HTTP_X_FORWARDED_FOR', 'REMOTE_ADDR'];
+        
+        foreach ($ipKeys as $key) {
+            if (!empty($_SERVER[$key])) {
+                $ip = $_SERVER[$key];
+                if (strpos($ip, ',') !== false) {
+                    $ip = trim(explode(',', $ip)[0]);
+                }
+                if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+                    return $ip;
+                }
+            }
+        }
+        
+        return $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+    }
+
+    /**
+     * Get request header
+     * @param string $name
+     * @param mixed $default
+     * @return mixed
+     */
+    public function getHeader($name, $default = null)
+    {
+        $headers = $this->request['headers'];
+        $name = strtolower($name);
+        
+        foreach ($headers as $key => $value) {
+            if (strtolower($key) === $name) {
+                return $value;
+            }
+        }
+        
+        return $default;
+    }
+
+    // ===== RESPONSE METHODS =====
+
+    /**
+     * Set response header
+     * @param string $name
+     * @param string $value
+     * @param bool $replace
+     * @return self
+     */
+    public function setHeader($name, $value, $replace = true)
+    {
+        header("$name: $value", $replace);
+        return $this;
+    }
+
+    /**
+     * Set response status code
+     * @param int $code
+     * @return self
+     */
+    public function setStatusCode($code)
+    {
+        http_response_code($code);
+        return $this;
+    }
+
+    /**
+     * Send JSON response with data
+     * @param mixed $data
+     * @param int $statusCode
+     * @param array $headers
+     * @return never
+     */
+    public function respondWithJSON($data, $statusCode = 200, $headers = [])
+    {
+        $this->setStatusCode($statusCode);
+        $this->setHeader('Content-Type', 'application/json');
+        
+        foreach ($headers as $name => $value) {
+            $this->setHeader($name, $value);
+        }
+        
+        echo json_encode($data, JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    /**
+     * Send created response (201)
+     * @param mixed $data
+     * @return never
+     */
+    public function respondCreated($data = null)
+    {
+        $response = ['status' => 'created', 'message' => 'Resource created successfully'];
+        if ($data !== null) {
+            $response['data'] = $data;
+        }
+        $this->respondWithJSON($response, 201);
+    }
+
+    /**
+     * Send no content response (204)
+     * @return never
+     */
+    public function respondNoContent()
+    {
+        $this->setStatusCode(204);
+        exit;
+    }
+
+    /**
+     * Send bad request response (400)
+     * @param string $message
+     * @return never
+     */
+    public function respondBadRequest($message = 'Bad Request')
+    {
+        $this->respondWithJSON([
+            'status' => 'error',
+            'message' => $message
+        ], 400);
+    }
+
+    /**
+     * Send unauthorized response (401)
+     * @param string $message
+     * @return never
+     */
+    public function respondUnauthorized($message = 'Unauthorized')
+    {
+        $this->respondWithJSON([
+            'status' => 'error',
+            'message' => $message
+        ], 401);
+    }
+
+    /**
+     * Send forbidden response (403)
+     * @param string $message
+     * @return never
+     */
+    public function respondForbidden($message = 'Forbidden')
+    {
+        $this->respondWithJSON([
+            'status' => 'error',
+            'message' => $message
+        ], 403);
+    }
+
+    /**
+     * Send not found response (404)
+     * @param string $message
+     * @return never
+     */
+    public function respondNotFound($message = 'Not Found')
+    {
+        $this->respondWithJSON([
+            'status' => 'error',
+            'message' => $message
+        ], 404);
+    }
+
+    /**
+     * Send internal server error response (500)
+     * @param string $message
+     * @return never
+     */
+    public function respondInternalError($message = 'Internal Server Error')
+    {
+        $this->respondWithJSON([
+            'status' => 'error',
+            'message' => $message
+        ], 500);
+    }
+
+    // ===== MODEL & HELPER LOADING =====
+
+    /**
+     * Load and instantiate a model
+     * @param string $modelName
+     * @param string|null $alias
+     * @return object
+     */
+    public function model($modelName, $alias = null)
+    {
+        $alias = $alias ?: $modelName;
+        
+        if (isset($this->models[$alias])) {
+            return $this->models[$alias];
+        }
+        
+        $modelClass = "\\App\\Models\\{$modelName}";
+        
+        if (!class_exists($modelClass)) {
+            throw new \Exception("Model {$modelName} not found");
+        }
+        
+        $this->models[$alias] = new $modelClass();
+        return $this->models[$alias];
+    }
+
+    /**
+     * Load a helper
+     * @param string $helperName
+     * @return bool
+     */
+    public function helper($helperName)
+    {
+        if (in_array($helperName, $this->helpers)) {
+            return true;
+        }
+        
+        $helperFile = __DIR__ . "/../app/Helpers/{$helperName}_helper.php";
+        
+        if (file_exists($helperFile)) {
+            require_once $helperFile;
+            $this->helpers[] = $helperName;
+            return true;
+        }
+        
+        $this->logError("Helper {$helperName} not found");
+        return false;
+    }
+
+    // ===== VALIDATION METHODS =====
+
+    /**
+     * Set validation rules
+     * @param array $rules
+     * @return self
+     */
+    public function setValidationRules($rules)
+    {
+        $this->validationRules = $rules;
+        return $this;
+    }
+
+    /**
+     * Validate data against rules
+     * @param array $data
+     * @param array|null $rules
+     * @return bool
+     */
+    public function validate($data, $rules = null)
+    {
+        $rules = $rules ?: $this->validationRules;
+        $this->validationErrors = [];
+        
+        foreach ($rules as $field => $rule) {
+            $value = $data[$field] ?? null;
+            $ruleList = is_string($rule) ? explode('|', $rule) : $rule;
+            
+            foreach ($ruleList as $singleRule) {
+                if (!$this->validateField($field, $value, $singleRule)) {
+                    break; // Stop on first error for this field
+                }
+            }
+        }
+        
+        return empty($this->validationErrors);
+    }
+
+    /**
+     * Validate single field
+     * @param string $field
+     * @param mixed $value
+     * @param string $rule
+     * @return bool
+     */
+    private function validateField($field, $value, $rule)
+    {
+        $parts = explode('[', $rule, 2);
+        $ruleName = $parts[0];
+        $parameter = isset($parts[1]) ? rtrim($parts[1], ']') : null;
+        
+        switch ($ruleName) {
+            case 'required':
+                if (empty($value)) {
+                    $this->validationErrors[$field][] = "The {$field} field is required.";
+                    return false;
+                }
+                break;
+                
+            case 'min_length':
+                if (strlen($value) < (int)$parameter) {
+                    $this->validationErrors[$field][] = "The {$field} field must be at least {$parameter} characters.";
+                    return false;
+                }
+                break;
+                
+            case 'max_length':
+                if (strlen($value) > (int)$parameter) {
+                    $this->validationErrors[$field][] = "The {$field} field cannot exceed {$parameter} characters.";
+                    return false;
+                }
+                break;
+                
+            case 'valid_email':
+                if (!filter_var($value, FILTER_VALIDATE_EMAIL)) {
+                    $this->validationErrors[$field][] = "The {$field} field must contain a valid email address.";
+                    return false;
+                }
+                break;
+                
+            case 'numeric':
+                if (!is_numeric($value)) {
+                    $this->validationErrors[$field][] = "The {$field} field must contain only numbers.";
+                    return false;
+                }
+                break;
+                
+            case 'integer':
+                if (!filter_var($value, FILTER_VALIDATE_INT)) {
+                    $this->validationErrors[$field][] = "The {$field} field must contain an integer.";
+                    return false;
+                }
+                break;
+                
+            case 'alpha':
+                if (!ctype_alpha($value)) {
+                    $this->validationErrors[$field][] = "The {$field} field may only contain alphabetical characters.";
+                    return false;
+                }
+                break;
+                
+            case 'alpha_numeric':
+                if (!ctype_alnum($value)) {
+                    $this->validationErrors[$field][] = "The {$field} field may only contain alpha-numeric characters.";
+                    return false;
+                }
+                break;
+        }
+        
+        return true;
+    }
+
+    /**
+     * Get validation errors
+     * @param string|null $field
+     * @return array
+     */
+    public function getValidationErrors($field = null)
+    {
+        if ($field !== null) {
+            return $this->validationErrors[$field] ?? [];
+        }
+        return $this->validationErrors;
+    }
+
+    // ===== COOKIE METHODS =====
+
+    /**
+     * Set a cookie
+     * @param string $name
+     * @param string $value
+     * @param int $expire
+     * @param string $path
+     * @param string $domain
+     * @param bool $secure
+     * @param bool $httponly
+     * @return bool
+     */
+    public function setCookie($name, $value, $expire = 0, $path = '/', $domain = '', $secure = false, $httponly = true)
+    {
+        return setcookie($name, $value, $expire, $path, $domain, $secure, $httponly);
+    }
+
+    /**
+     * Get a cookie value
+     * @param string $name
+     * @param mixed $default
+     * @return mixed
+     */
+    public function getCookie($name, $default = null)
+    {
+        return $_COOKIE[$name] ?? $default;
+    }
+
+    /**
+     * Delete a cookie
+     * @param string $name
+     * @param string $path
+     * @param string $domain
+     * @return bool
+     */
+    public function deleteCookie($name, $path = '/', $domain = '')
+    {
+        return setcookie($name, '', time() - 3600, $path, $domain);
+    }
+
+    // ===== SECURITY METHODS =====
+
+    /**
+     * Generate CSRF token
+     * @return string
+     */
+    public function generateCSRFToken()
+    {
+        $token = bin2hex(random_bytes(32));
+        $_SESSION['csrf_token'] = $token;
+        return $token;
+    }
+
+    /**
+     * Get CSRF token
+     * @return string
+     */
+    public function getCSRFToken()
+    {
+        return $_SESSION['csrf_token'] ?? '';
+    }
+
+    /**
+     * Verify CSRF token
+     * @param string $token
+     * @return bool
+     */
+    public function verifyCSRFToken($token)
+    {
+        return isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token);
+    }
+
+    /**
+     * XSS Clean
+     * @param mixed $data
+     * @return mixed
+     */
+    public function xssClean($data)
+    {
+        if (is_array($data)) {
+            return array_map([$this, 'xssClean'], $data);
+        }
+        
+        // Remove potential XSS vectors
+        $data = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]+/S', '', $data);
+        $data = str_replace(['<script', '</script>', 'javascript:', 'onclick=', 'onerror='], '', $data);
+        
+        return htmlspecialchars($data, ENT_QUOTES, 'UTF-8');
+    }
+
+    // ===== URL HELPER METHODS =====
+
+    /**
+     * Create URL from segments
+     * @param string $segments
+     * @param array $params
+     * @return string
+     */
+    public function url($segments = '', $params = [])
+    {
+        $url = $this->base_url($segments);
+        
+        if (!empty($params)) {
+            $url .= '?' . http_build_query($params);
+        }
+        
+        return $url;
+    }
+
+    /**
+     * Create site URL
+     * @param string $uri
+     * @return string
+     */
+    public function site_url($uri = '')
+    {
+        return $this->base_url($uri);
+    }
+
+    /**
+     * Get current URL
+     * @return string
+     */
+    public function current_url()
+    {
+        return $this->base_url($_SERVER['REQUEST_URI'] ?? '');
+    }
+
+    /**
+     * Get previous URL from referer
+     * @return string
+     */
+    public function previous_url()
+    {
+        return $_SERVER['HTTP_REFERER'] ?? $this->base_url();
+    }
+
+    // ===== PAGINATION HELPER =====
+
+    /**
+     * Generate pagination links
+     * @param int $totalRecords
+     * @param int $perPage
+     * @param int $currentPage
+     * @param string $baseUrl
+     * @return array
+     */
+    public function paginate($totalRecords, $perPage = 10, $currentPage = 1, $baseUrl = '')
+    {
+        $totalPages = ceil($totalRecords / $perPage);
+        $currentPage = max(1, min($currentPage, $totalPages));
+        
+        $pagination = [
+            'total_records' => $totalRecords,
+            'per_page' => $perPage,
+            'current_page' => $currentPage,
+            'total_pages' => $totalPages,
+            'has_previous' => $currentPage > 1,
+            'has_next' => $currentPage < $totalPages,
+            'previous_page' => $currentPage > 1 ? $currentPage - 1 : null,
+            'next_page' => $currentPage < $totalPages ? $currentPage + 1 : null,
+            'offset' => ($currentPage - 1) * $perPage,
+            'links' => []
+        ];
+        
+        // Generate page links
+        $startPage = max(1, $currentPage - 2);
+        $endPage = min($totalPages, $currentPage + 2);
+        
+        for ($i = $startPage; $i <= $endPage; $i++) {
+            $pagination['links'][] = [
+                'page' => $i,
+                'url' => $baseUrl . '?page=' . $i,
+                'is_current' => $i === $currentPage
+            ];
+        }
+        
+        return $pagination;
+    }
+
+    // ===== ENHANCED SESSION METHODS =====
+
+    /**
+     * Set session data with optional encryption
+     * @param string|array $key
+     * @param mixed $value
+     * @param bool $encrypt
+     * @return void
+     */
+    public function setSession($key, $value = null, $encrypt = false)
+    {
+        if (is_array($key)) {
+            foreach ($key as $k => $v) {
+                $_SESSION[$k] = $encrypt ? $this->encrypt($v) : $v;
+            }
+        } else {
+            $_SESSION[$key] = $encrypt ? $this->encrypt($value) : $value;
+        }
+    }
+
+    /**
+     * Get session data with optional decryption
+     * @param string $key
+     * @param mixed $default
+     * @param bool $decrypt
+     * @return mixed
+     */
+    public function getSession($key = null, $default = null, $decrypt = false)
+    {
+        if ($key === null) {
+            return $_SESSION;
+        }
+        
+        $value = $_SESSION[$key] ?? $default;
+        
+        return $decrypt && $value !== $default ? $this->decrypt($value) : $value;
+    }
+
+    /**
+     * Remove session data
+     * @param string|array $key
+     * @return void
+     */
+    public function unsetSession($key)
+    {
+        if (is_array($key)) {
+            foreach ($key as $k) {
+                unset($_SESSION[$k]);
+            }
+        } else {
+            unset($_SESSION[$key]);
+        }
+    }
+
+    /**
+     * Basic encryption (for demo purposes - use proper encryption in production)
+     * @param string $data
+     * @return string
+     */
+    private function encrypt($data)
+    {
+        return base64_encode($data);
+    }
+
+    /**
+     * Basic decryption (for demo purposes - use proper decryption in production)
+     * @param string $data
+     * @return string
+     */
+    private function decrypt($data)
+    {
+        return base64_decode($data);
+    }
+
+    // ===== ORIGINAL METHODS (PRESERVED) =====
 
     public function to($url)
     {
@@ -87,28 +798,38 @@ class BaseController
 
     public function redirect()
     {
-        return $this; 
+        return $this;
     }
 
     public function base_url($path = '')
     {
+        return $this->getBaseUrl() . ltrim($path, '/');
+    }
+
+    protected function getBaseUrl()
+    {
         $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
-        
-        return $protocol . '://' . $_SERVER['HTTP_HOST'] . '/' . ltrim($path, '/');
+        $host = $_SERVER['HTTP_HOST'];
+        $script = $_SERVER['SCRIPT_NAME'];
+        $baseDir = dirname($script);
+
+        $baseDir = str_replace('\\', '/', $baseDir);
+
+        if ($baseDir !== '/') {
+            $baseDir .= '/';
+        }
+
+        return $protocol . '://' . $host . $baseDir;
     }
 
     public function filterMessage($message)
     {
         $pattern = '/[\"<>\/*\&\%\$\#$$$$\[\]\{\}]/';
-
         $cleanedMessage = preg_replace($pattern, '', $message);
-
-        $cleanedMessage = str_replace(["'", '`'], "‘", $cleanedMessage);
-
+        $cleanedMessage = str_replace(["'", '`'], "'", $cleanedMessage);
         if ($cleanedMessage !== $message) {
             return $cleanedMessage;
         }
-
         return $message;
     }
 
@@ -119,29 +840,22 @@ class BaseController
         if (!is_dir($logDir)) {
             mkdir($logDir, 0777, true);
         }
-        
         $logFile = $logDir . '/error_' . date('Y-m-d') . '.log';
         $dateTime = date('Y-m-d H:i:s');
         $logMessage = "[{$dateTime}] ERROR: {$message}\n";
-        
         file_put_contents($logFile, $logMessage, FILE_APPEND);
     }
 
     protected function logDebug($message)
     {
         $logDir = __DIR__ . '/../writable/logs';
-        
         date_default_timezone_set("Asia/Tashkent");
-        
         if (!is_dir($logDir)) {
             mkdir($logDir, 0777, true);
         }
-        
         $logFile = $logDir . '/debug_' . date('Y-m-d') . '.log';
-        
         $dateTime = date('Y-m-d H:i:s');
         $logMessage = "[{$dateTime}] DEBUG: {$message}\n";
-        
         file_put_contents($logFile, $logMessage, FILE_APPEND);
     }
 
@@ -151,19 +865,15 @@ class BaseController
             $this->logError('No file uploaded.');
             return ['error' => 'No file uploaded.'];
         }
-
         $file = $_FILES[$fileInputName];
-
         if ($file['error'] !== UPLOAD_ERR_OK) {
             $this->logError('Error during file upload. Error code: ' . $file['error']);
             return ['error' => 'Error during file upload.'];
         }
-
         if ($file['size'] > $maxFileSize) {
             $this->logError('File is too large. File size: ' . $file['size']);
             return ['error' => 'File is too large.'];
         }
-
         if (!empty($allowedExtensions)) {
             $fileInfo = pathinfo($file['name']);
             $extension = strtolower($fileInfo['extension']);
@@ -172,7 +882,6 @@ class BaseController
                 return ['error' => 'Invalid file type.'];
             }
         }
-
         $uploadDir = __DIR__ . '/../writable/uploads/';
         if ($folder) {
             $uploadDir .= $folder . '/';
@@ -180,15 +889,12 @@ class BaseController
                 mkdir($uploadDir, 0777, true);
             }
         }
-
         $encryptedFileName = md5(uniqid(rand(), true)) . '.' . pathinfo($file['name'], PATHINFO_EXTENSION);
         $destinationPath = $uploadDir . $encryptedFileName;
-
         if (!move_uploaded_file($file['tmp_name'], $destinationPath)) {
             $this->logError('Failed to move uploaded file. File: ' . $file['name']);
             return ['error' => 'Failed to move uploaded file'];
         }
-
         return [
             'success' => true,
             'fileName' => $encryptedFileName,
@@ -210,30 +916,29 @@ class BaseController
                 throw new \Exception("View file \"{$view}.php\" not found.");
             }
         } catch (\Exception $e) {
-            $this->logError($e->getMessage()); 
+            $this->logError($e->getMessage());
             $this->showError(500, $e->getMessage());
         }
     }
 
-    /**
-    * Displays the error and writes it to the log.
-    * 
-    * @param int $code Error code (e.g. 404)
-    * @param string $message Detailed information about the error
-    */
+    protected function renderView(string $viewPath, array $data = []): void
+    {
+        if (property_exists($this, 'settings') && is_array($this->settings)) {
+            $data['settings'] = $this->settings;
+        }
+
+        $this->view($viewPath, $data);
+    }
+
     private function showError($code, $message)
     {
         http_response_code($code);
-
         $errorFile = __DIR__ . "/../app/Views/errors/{$code}.php";
-        
         if (file_exists($errorFile)) {
             include($errorFile);
-            
             $this->logError("{$code} {$message}");
             return;
         }
-
         $this->logError("{$code} {$message}");
         echo "
         <!DOCTYPE html>
@@ -242,15 +947,14 @@ class BaseController
             <meta charset='UTF-8'>
             <meta name='viewport' content='width=device-width, initial-scale=1.0'>
             <link rel='icon' href='favicon.ico' type='image/png'>
-            <title>{$code} - Xatolik</title>
-            <link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css'>
+            <title>{$code} - Error</title>
+            <link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css  '>
             <style>
                 * {
                     margin: 0;
                     padding: 0;
                     box-sizing: border-box;
                 }
-
                 body {
                     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
                     background-color: #f5f5f5;
@@ -261,7 +965,6 @@ class BaseController
                     margin: 0;
                     color: #333;
                 }
-
                 .error-container {
                     background-color: #fff;
                     padding: 30px 20px;
@@ -271,25 +974,21 @@ class BaseController
                     max-width: 420px;
                     width: 100%;
                 }
-
                 .error-container h1 {
                     font-size: 60px;
                     color: #e74c3c;
                     margin-bottom: 10px;
                 }
-
                 .error-container h2 {
                     font-size: 20px;
                     color: #555;
                     margin-bottom: 15px;
                 }
-
                 .error-container p {
                     font-size: 14px;
                     color: #777;
                     margin-bottom: 20px;
                 }
-
                 .error-container .button {
                     text-decoration: none;
                     background-color: #3498db;
@@ -300,40 +999,32 @@ class BaseController
                     display: inline-block;
                     transition: background-color 0.3s ease;
                 }
-
                 .error-container .button:hover {
                     background-color: #2980b9;
                 }
-
                 .error-container .icon {
                     font-size: 60px;
                     color: #e74c3c;
                     margin-bottom: 15px;
                 }
-
                 @media (max-width: 600px) {
                     .error-container h1 {
                         font-size: 50px;
                     }
-
                     .error-container h2 {
                         font-size: 18px;
                     }
-
                     .error-container p {
                         font-size: 12px;
                     }
-
                     .error-container .button {
                         padding: 6px 12px;
                         font-size: 12px;
                     }
-
                     .error-container .icon {
                         font-size: 50px;
                     }
                 }
-
             </style>
         </head>
         <body>
@@ -351,22 +1042,13 @@ class BaseController
         ";
     }
 
-    /**
-    * Debugger: Show variables nicely
-    *
-    * @param mixed $data - Variable being checked
-    * @param bool $stop - if true the script stops (default: true)
-    */
-
     public function dd($data, $stop = true)
     {
-        echo "<pre style='background-color: #222; color: #0f0; padding: 15px; border: 1px solid #333; border-radius: 5px; font-family: monospace;'>"; 
-        echo "<strong>Debugging Output:</strong>\n\n";
+        echo "<pre style='background-color: #222; color: #0f0; padding: 15px; border: 1px solid #333; border-radius: 5px; font-family: monospace;'>";
+        echo "<strong>Debugging output:</strong>\n";
         print_r($data);
         echo "</pre>";
-        
         $this->logDebug(print_r($data, true));
-        
         if ($stop) {
             die;
         }
@@ -386,107 +1068,80 @@ class BaseController
         $this->showError(500, $message);
     }
 
-    /**
-    * Cache function.
-    * 
-    * This function stores the given key and value in the cache as a file.
-    * If the cache exists, it returns its value.
-    *
-    * @param string $key - Cache key
-    * @param mixed $data - Data to be cached
-    * @param int $duration - Cache duration (in seconds)
-    * @return mixed
-    */
     public function cache($key, $data = null, $duration = 3600)
     {
         $cacheDir = __DIR__ . '/../writable/cache/';
-
         if (!is_dir($cacheDir)) {
             mkdir($cacheDir, 0777, true);
         }
-
         $cacheFile = $cacheDir . md5($key) . '.cache';
-
         if ($data === null) {
             if (file_exists($cacheFile) && (filemtime($cacheFile) + $duration > time())) {
                 return unserialize(file_get_contents($cacheFile));
             }
             return null;
         }
-
         file_put_contents($cacheFile, serialize($data));
         return true;
     }
 
-    /**
-    * Generate a unique user_id.
-    * 
-    * Generates a unique and random ID for each user.
-    * 
-    * @return string
-    */
     protected function generateUserId()
     {
         return uniqid('USER-');
     }
-    
-    /**
-    * Return JSON response.
-    */
-    public function jsonResponse($data, $status = 200)
+
+    public function jsonResponse($data, $statusCode = 200)
     {
-        header("Content-Type: application/json");
-        http_response_code($status);
-        echo json_encode($data, JSON_PRETTY_PRINT);
-        exit();
+        http_response_code($statusCode);
+        header('Content-Type: application/json');
+        echo json_encode($data);
+        exit;
     }
 
-    /**
-     * Retrieve and return POST data securely.
-     */
     public function inputPost($key)
     {
         return isset($_POST[$key]) ? htmlspecialchars(trim($_POST[$key])) : null;
     }
 
-    /**
-     * Retrieve and return GET data securely.
-     */
     public function inputGet($key)
     {
         return isset($_GET[$key]) ? htmlspecialchars(trim($_GET[$key])) : null;
     }
-    
-    /**
-     * Clear inputs from special characters.
-     */
+
     public function sanitizeInput($input, $type = 'string')
     {
+        if (is_array($input)) {
+            return array_map(function($item) use ($type) {
+                return $this->sanitizeInput($item, $type);
+            }, $input);
+        }
+        $input = trim($input);
+        $input = stripslashes($input);
+
         switch ($type) {
             case 'email':
-                return filter_var(trim($input), FILTER_SANITIZE_EMAIL);
+                $input = filter_var($input, FILTER_SANITIZE_EMAIL);
+                break;
             case 'int':
-                return filter_var($input, FILTER_SANITIZE_NUMBER_INT);
+                $input = filter_var($input, FILTER_SANITIZE_NUMBER_INT);
+                break;
             case 'float':
-                return filter_var($input, FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
+                $input = filter_var($input, FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
+                break;
             case 'url':
-                return filter_var(trim($input), FILTER_SANITIZE_URL);
+                $input = filter_var($input, FILTER_SANITIZE_URL);
+                break;
             default:
-                return htmlspecialchars(trim($input), ENT_QUOTES, 'UTF-8');
+                break;
         }
+        return $input;
     }
 
-    /**
-     * Set flash message.
-     */
     public function setFlashMessage($key, $message)
     {
         $_SESSION['flash_messages'][$key] = $message;
     }
 
-    /**
-     * Show flash message.
-     */
     public function getFlashMessage($key)
     {
         if (isset($_SESSION['flash_messages'][$key])) {
@@ -496,22 +1151,15 @@ class BaseController
         }
         return null;
     }
-    
-    /**
-     * Set flash messages
-     */
+
     protected function setFlash($type, $message)
     {
         if (!isset($_SESSION['flash_messages'])) {
             $_SESSION['flash_messages'] = [];
         }
-        
         $_SESSION['flash_messages'][$type] = $message;
     }
-    
-    /**
-     * Read flash messages
-     */
+
     protected function getFlash($type)
     {
         if (isset($_SESSION['flash_messages'][$type])) {
@@ -519,37 +1167,47 @@ class BaseController
             unset($_SESSION['flash_messages'][$type]);
             return $message;
         }
-        
         return null;
     }
-    
-    /**
-     * Check if user has the required role
-     */
+
+    protected function isAjaxRequest()
+    {
+        return !empty($_SERVER['HTTP_X_REQUESTED_WITH']) &&
+               strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+    }
+
+    protected function validateRequired($fields, $data)
+    {
+        $errors = [];
+        foreach ($fields as $field) {
+            if (empty($data[$field])) {
+                $errors[$field] = "The $field field is required.";
+            }
+        }
+        return $errors;
+    }
+
+    protected function validateEmail($email)
+    {
+        return filter_var($email, FILTER_VALIDATE_EMAIL) !== false;
+    }
+
     protected function hasRole($requiredRole)
     {
         if (!isset($_SESSION['role'])) {
             return false;
         }
-        
         if (is_array($requiredRole)) {
             return in_array($_SESSION['role'], $requiredRole);
         }
-        
         return $_SESSION['role'] === $requiredRole;
     }
-    
-    /**
-     * Check if user is authenticated
-     */
+
     protected function isAuthenticated()
     {
         return isset($_SESSION['logged_in']) && $_SESSION['logged_in'];
     }
 
-    /**
-     * Show Debug page
-     */
     public function showDebugInfo()
     {
         if (Env::get('APP_DEBUG', false)) {
@@ -559,21 +1217,14 @@ class BaseController
         }
     }
 
-    /**
-     * Get memory usage information
-     */
     public function getMemoryUsage()
     {
         return Debug::getMemoryUsage();
     }
 
-    /**
-     * Get execution time information
-     */
     public function getExecutionTime()
     {
         return Debug::getExecutionTime();
     }
-
 }
 ?>
