@@ -31,6 +31,22 @@ use System\ErrorHandler;
 
 Env::load();
 
+$cookie_name = 'ci_session';
+$cookie_value = hash('sha256', time() . uniqid(mt_rand(), true)); 
+$expiration_time = time() + (3600 * 24 * 7); 
+
+setcookie(
+    $cookie_name,
+    $cookie_value,
+    [
+        'expires' => $expiration_time,
+        'path'    => '/', 
+        'secure'  => true, 
+        'httponly' => true,
+        'samesite' => 'Lax'
+    ]
+);
+
 if (Env::get('APP_DEBUG') === 'true') {
     Debug::init();
 } else {
@@ -38,7 +54,7 @@ if (Env::get('APP_DEBUG') === 'true') {
 }
 
 $migrateController = new \App\Controllers\MigrateController();
-$migrateController->migrate(); 
+$migrateController->migrate();  
 
 $router = new Router();
 $router->handleRequest();
