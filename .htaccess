@@ -19,6 +19,7 @@ RewriteRule ^composer\.(json|lock) - [F,L]
     Header always set X-Content-Type-Options nosniff
     Header always set X-Frame-Options DENY
     Header always set X-XSS-Protection "1; mode=block"
+    Header always set X-Powered-By "CodeIgniter"
 </IfModule>
 
 # Enable compression
