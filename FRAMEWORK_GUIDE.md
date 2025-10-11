@@ -1,4 +1,4 @@
-# CodeIgniter Alternative Framework - Developer Guide
+# CodeIgniter Alternative Framework - Developer guide
 
 > **Version:** 2.0.0
 > **Author:** Oyatillo (Inforteuz)
