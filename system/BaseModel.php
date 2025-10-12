@@ -520,6 +520,17 @@ class BaseModel
     public function get()
     {
         $sql = $this->buildSelectQuery();
+        
+        if (DebugToolbar::isEnabled()) {
+            $builderInfo = [
+                'select' => $this->lastSelect,
+                'where' => $this->lastWhere,
+                'joins' => $this->lastJoin,
+                'order' => $this->lastOrder,
+                'limit' => $this->lastLimit
+            ];
+        }
+        
         $result = $this->query($sql, $this->lastParams);
         $this->resetQueryBuilder();
         return $result;
