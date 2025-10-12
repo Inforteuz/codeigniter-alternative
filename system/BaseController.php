@@ -45,6 +45,8 @@ use System\Core\Env;
 use System\Database\Database;
 use System\Core\Debug;
 use System\Core\DebugToolbar;
+use System\Cache\Cache;
+use System\Cache\CacheHelper;
 
 class BaseController
 {
@@ -1058,18 +1060,40 @@ class BaseController
         ";
     }
 
-    public function dd($data, $stop = true)
+   public function dd($data, $stop = true)
     {
-        echo "<pre style='background-color: #222; color: #0f0; padding: 15px; border: 1px solid #333; border-radius: 5px; font-family: monospace;'>";
-        echo "<strong>Debugging output:</strong>\n";
+        $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 1)[0] ?? [];
+        $file = $backtrace['file'] ?? 'unknown';
+        $line = $backtrace['line'] ?? 'unknown';
+    
+        echo "<div style='
+            background:#1e1e1e;
+            color:#dcdcdc;
+            font-family:Consolas,monospace;
+            font-size:13px;
+            padding:20px;
+            margin:15px;
+            border-left:5px solid #007acc;
+            border-radius:6px;
+            line-height:1.5;
+        '>";
+        
+        echo "<div style='color:#9cdcfe;margin-bottom:8px;'>
+                <strong>Debug dump:</strong> <small>{$file}:{$line}</small>
+              </div>";
+        echo "<pre style='white-space:pre-wrap;margin:0;color:#ce9178;'>";
         print_r($data);
         echo "</pre>";
-        $this->logDebug(print_r($data, true));
-        if ($stop) {
-            die;
+    
+        echo "</div>";
+    
+        if (method_exists($this, 'logDebug')) {
+            $this->logDebug("DD at {$file}:{$line}\n" . print_r($data, true));
         }
+    
+        if ($stop) exit;
     }
-
+    
     public function show404()
     {
         header("HTTP/1.1 404 Not Found");
@@ -1084,21 +1108,55 @@ class BaseController
         $this->showError(500, $message);
     }
 
-    public function cache($key, $data = null, $duration = 3600)
+    public function cache($key, $value = null, $duration = 3600)
     {
-        $cacheDir = __DIR__ . '/../writable/cache/';
-        if (!is_dir($cacheDir)) {
-            mkdir($cacheDir, 0777, true);
-        }
-        $cacheFile = $cacheDir . md5($key) . '.cache';
-        if ($data === null) {
-            if (file_exists($cacheFile) && (filemtime($cacheFile) + $duration > time())) {
-                return unserialize(file_get_contents($cacheFile));
+        if ($value === null) {
+            $cached = Cache::get($key);
+            if ($cached !== null) {
+                \System\Core\DebugToolbar::log("Cache hit: {$key}", 'cache');
+            } else {
+                \System\Core\DebugToolbar::log("Cache miss: {$key}", 'cache');
             }
-            return null;
+            return $cached;
         }
-        file_put_contents($cacheFile, serialize($data));
+
+        Cache::put($key, $value, $duration);
+        \System\Core\DebugToolbar::log("Cache stored: {$key}", 'cache');
         return true;
+    }
+
+    public function cacheRemember($key, $ttl, callable $callback)
+    {
+        return Cache::remember($key, $ttl, $callback);
+    }
+
+    public function cacheWithTags($tags, $key, $ttl, callable $callback)
+    {
+        return CacheHelper::cacheTags()->tag($tags)->remember($key, $ttl, $callback);
+    }
+
+    public function cacheForget($key)
+    {
+        \System\Core\DebugToolbar::log("Cache forget: {$key}", 'cache');
+        return Cache::forget($key);
+    }
+
+    public function cacheFlush()
+    {
+        \System\Core\DebugToolbar::log("Cache flushed manually", 'cache');
+        return Cache::flush();
+    }
+
+    public function cacheFlushTag($tag)
+    {
+        $deleted = CacheHelper::flushTag($tag);
+        \System\Core\DebugToolbar::log("Cache tag flushed: {$tag} ({$deleted} files)", 'cache');
+        return $deleted;
+    }
+
+    public function cacheStats()
+    {
+        return Cache::getStats();
     }
 
     protected function generateUserId()
