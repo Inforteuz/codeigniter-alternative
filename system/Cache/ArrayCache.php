@@ -20,7 +20,7 @@
  * @author      Inforte
  * @version     1.0.0
  * @license     MIT License
- * @since       2025-10-12
+ * @since       2024-12-12
  */
 
 namespace System\Cache;
@@ -167,3 +167,4 @@ class ArrayCache
     }
 }
 ?>
+
