@@ -5,6 +5,7 @@ namespace System\Database;
 use PDO;
 use PDOException;
 use System\Core\Env;
+use System\Core\DebugToolbar;
 
 /**
  * Database Class
@@ -108,8 +109,6 @@ class Database
             ];
 
             $this->connection = new PDO($dsn, $this->username, $this->password, $options);
-
-            // Set database connection timezone
             $this->connection->exec("SET time_zone = '+05:00'");
 
         } catch (PDOException $e) {
@@ -183,11 +182,21 @@ class Database
      */
     public function execute($sql, $params = [])
     {
+        $startTime = microtime(true);
+
         try {
             $stmt = $this->prepare($sql);
             $stmt->execute($params);
+
+            $executionTime = (microtime(true) - $startTime) * 1000; 
+
+            DebugToolbar::addQuery($sql, $params, $executionTime);
+
             return $stmt;
         } catch (PDOException $e) {
+            $executionTime = (microtime(true) - $startTime) * 1000;
+            DebugToolbar::addQuery($sql, $params, $executionTime, false);
+
             $this->logError("Query execution failed: " . $e->getMessage() . " | SQL: " . $sql);
             throw new \Exception("Failed to execute SQL query.");
         }
@@ -516,11 +525,22 @@ class Database
      */
     public function query($sql, $params = [])
     {
+        $startTime = microtime(true);
+
         try {
             $stmt = $this->prepare($sql);
             $stmt->execute($params);
+
+            $executionTime = (microtime(true) - $startTime) * 1000;
+
+            DebugToolbar::addQuery($sql, $params, $executionTime);
+
             return $stmt;
         } catch (PDOException $e) {
+            $executionTime = (microtime(true) - $startTime) * 1000;
+
+            DebugToolbar::addQuery($sql, $params, $executionTime, false);
+
             $this->logError("Query failed: " . $e->getMessage() . " | SQL: " . $sql);
             throw new \Exception("SQL query error: " . $e->getMessage());
         }
