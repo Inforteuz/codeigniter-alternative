@@ -44,6 +44,7 @@ namespace System;
 use System\Core\Env;
 use System\Database\Database;
 use System\Core\Debug;
+use System\Core\DebugToolbar;
 
 class BaseController
 {
@@ -905,16 +906,31 @@ class BaseController
         ];
     }
 
-    protected function view($view, $data = [])
+   protected function view($view, $data = [])
     {
         try {
             extract($data);
             $viewFile = "app/Views/{$view}.php";
-            if (file_exists($viewFile)) {
-                require_once $viewFile;
-            } else {
+            if (!file_exists($viewFile)) {
                 throw new \Exception("View file \"{$view}.php\" not found.");
             }
+
+            ob_start();
+            require_once $viewFile;
+            $output = ob_get_clean();
+
+            if (\System\Core\Env::get('DEBUG_MODE') === 'true') {
+                $toolbar = \System\Core\DebugToolbar::render();
+
+                if (stripos($output, '</body>') !== false) {
+                    $output = str_ireplace('</body>', $toolbar . '</body>', $output);
+                } else {
+                    $output .= $toolbar;
+                }
+            }
+
+            echo $output;
+
         } catch (\Exception $e) {
             $this->logError($e->getMessage());
             $this->showError(500, $e->getMessage());
