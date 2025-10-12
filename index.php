@@ -1,4 +1,5 @@
 <?php
+
 /**
  * =========================================================
  * CodeIgniter Alternative Framework - index file
@@ -26,36 +27,39 @@ require_once 'app/Controllers/MigrateController.php';
 
 use System\Core\Env;
 use System\Core\Debug;
+use System\Core\DebugToolbar;
 use System\Router;
 use System\ErrorHandler;
 
 Env::load();
 
-$cookie_name = 'ci_session';
-$cookie_value = hash('sha256', time() . uniqid(mt_rand(), true)); 
-$expiration_time = time() + (3600 * 24 * 7); 
+DebugToolbar::init();
+
+ErrorHandler::register();
+
+if (Env::get('APP_DEBUG') === 'true') {
+    Debug::init();
+}
 
 setcookie(
-    $cookie_name,
-    $cookie_value,
+    'ci_session',
+    hash('sha256', time() . uniqid(mt_rand(), true)),
     [
-        'expires' => $expiration_time,
-        'path'    => '/', 
-        'secure'  => true, 
+        'expires'  => time() + (3600 * 24 * 7),
+        'path'     => '/',
+        'secure'   => true,
         'httponly' => true,
         'samesite' => 'Lax'
     ]
 );
 
-if (Env::get('APP_DEBUG') === 'true') {
-    Debug::init();
-} else {
-    ErrorHandler::register();
-}
-
 $migrateController = new \App\Controllers\MigrateController();
-$migrateController->migrate();  
+$migrateController->migrate();
 
 $router = new Router();
 $router->handleRequest();
+
+if (Env::get('DEBUG_MODE') === 'true') {
+    echo DebugToolbar::render();
+}
 ?>
