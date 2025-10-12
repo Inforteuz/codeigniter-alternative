@@ -35,9 +35,8 @@
 // ====================================================================
 
 $router->get('', 'HomeController', 'index');
-$router->get('test', 'HomeController', 'test');
 
-// Logout Route (Accessible to all authenticated users)
+// Logout route (Accessible to all authenticated users)
 $router->get('logout', 'HomeController', 'logout');
 $router->post('logout', 'HomeController', 'logout');
 
@@ -182,5 +181,6 @@ $router->group(['CorsMiddleware'], function($router) {
 // ====================================================================
 
 $router->get('{any}', 'ErrorController', 'notFound');
+
 
 ?>
