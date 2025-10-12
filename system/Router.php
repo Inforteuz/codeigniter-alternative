@@ -16,6 +16,7 @@
 namespace System;
 
 use System\Core\Env;
+use System\Core\DebugToolbar;
 
 /**
  * The Router class handles HTTPS requests.
@@ -29,61 +30,34 @@ class Router
     protected $middlewares = [];
 
     /**
-     * Router constructor - adding basic routes
+     * Router constructor - Load routes from app/Routes/Routes.php
      */
     public function __construct()
-{
-    // Load environment variables from .env file
-    Env::load();
+    {
+        Env::load();
+
+        $this->loadAppRoutes();
+    }
 
     /**
-     * ------------------------------------------------
-     * Define your application routes below
-     * Use $this->addRoute(method, uri, controller, action, [middlewares])
-     * ------------------------------------------------
+     * Load application routes from app/Routes/Routes.php
+     *
+     * @throws \Exception if the routes file does not exist
      */
+        protected function loadAppRoutes()
+    {
+        $routesFile = dirname(__DIR__) . '/app/Routes/Routes.php';
 
-    // Public (Guest) routes
-    $this->addRoute('GET', '', 'HomeController', 'index');
-    $this->addRoute('GET', 'login', 'HomeController', 'index');
-    $this->addRoute('POST', 'login', 'HomeController', 'login');
+        if (file_exists($routesFile)) {
+            $router = $this;
+            require_once $routesFile;
 
-    // Logout route (optional middleware can be added)
-    $this->addRoute('GET', 'logout', 'HomeController', 'logout');
-    $this->addRoute('POST', 'logout', 'HomeController', 'logout');
-
-    // Dashboard route (typically protected by AuthMiddleware)
-    $this->addRoute('GET', 'dashboard', 'DashboardController', 'index');
-
-    // Example API routes
-    $this->addRoute('GET', 'api/user', 'ApiController', 'getUser');
-    $this->addRoute('POST', 'api/user', 'ApiController', 'updateUser');
-
-    // Static page routes
-    $this->addRoute('GET', 'about', 'PageController', 'about');
-    $this->addRoute('GET', 'contact', 'PageController', 'contact');
-    $this->addRoute('POST', 'contact', 'PageController', 'sendMessage');
-
-    // Profile routes
-    $this->addRoute('GET', 'profile', 'ProfileController', 'index');
-    $this->addRoute('POST', 'profile', 'ProfileController', 'update');
-
-    // Error pages
-    $this->addRoute('GET', 'error/403', 'ErrorController', 'forbidden');
-    $this->addRoute('GET', 'error/404', 'ErrorController', 'notFound');
-    $this->addRoute('GET', 'error/500', 'ErrorController', 'serverError');
-
-    // Optional: Add custom route for language switching
-    $this->addRoute('GET', 'change-language/{lang}', 'LanguageController', 'change');
-
-    /**
-     * ------------------------------
-     * Add your own routes below
-     * ------------------------------
-     * You can add middlewares to routes as needed:
-     * Example:
-     * $this->addRoute('GET', 'admin', 'AdminController', 'dashboard', ['AuthMiddleware']);
-     */
+            if (Env::get('DEBUG_MODE') === 'true') {
+                DebugToolbar::log("Application routes loaded from: {$routesFile}", 'router');
+            }
+        } else {
+            throw new \Exception("Routes file not found: {$routesFile}");
+        }
     }
 
     /**
@@ -96,10 +70,66 @@ class Router
             'method' => $action,
             'middlewares' => $middlewares
         ];
+
+        DebugToolbar::log("Route registered: {$method} {$pattern} -> {$controller}::{$action}", 'router');
     }
 
     /**
-     * Processes the HTTPS request.
+     * Add multiple routes with same middleware
+     */
+    public function group($middlewares, $callback)
+    {
+        $previousMiddlewares = $this->middlewares;
+        
+        $this->middlewares = array_merge($this->middlewares, $middlewares);
+        
+        call_user_func($callback, $this);
+        
+        $this->middlewares = $previousMiddlewares;
+    }
+
+    /**
+     * Add GET route
+     */
+    public function get($pattern, $controller, $action, $middlewares = [])
+    {
+        return $this->addRoute('GET', $pattern, $controller, $action, array_merge($this->middlewares, $middlewares));
+    }
+
+    /**
+     * Add POST route
+     */
+    public function post($pattern, $controller, $action, $middlewares = [])
+    {
+        return $this->addRoute('POST', $pattern, $controller, $action, array_merge($this->middlewares, $middlewares));
+    }
+
+    /**
+     * Add PUT route
+     */
+    public function put($pattern, $controller, $action, $middlewares = [])
+    {
+        return $this->addRoute('PUT', $pattern, $controller, $action, array_merge($this->middlewares, $middlewares));
+    }
+
+    /**
+     * Add DELETE route
+     */
+    public function delete($pattern, $controller, $action, $middlewares = [])
+    {
+        return $this->addRoute('DELETE', $pattern, $controller, $action, array_merge($this->middlewares, $middlewares));
+    }
+
+    /**
+     * Add PATCH route
+     */
+    public function patch($pattern, $controller, $action, $middlewares = [])
+    {
+        return $this->addRoute('PATCH', $pattern, $controller, $action, array_merge($this->middlewares, $middlewares));
+    }
+
+    /**
+     * Processes the HTTP request.
      */
     public function handleRequest()
     {
@@ -119,8 +149,20 @@ class Router
             if (!$this->executeMiddlewares($matchedRoute['middlewares'])) {
                 return;
             }
-            
-            $this->callControllerMethod($matchedRoute['controller'], $matchedRoute['method'], $matchedRoute['params'] ?? []);
+
+            $controllerName = $matchedRoute['controller'];
+            $action = $matchedRoute['method'];
+
+            DebugToolbar::setRoute(
+                $method,
+                $url,
+                $controllerName,
+                $action,
+                $matchedRoute['middlewares']
+            );
+
+            $this->callControllerMethod($controllerName, $action, $matchedRoute['params'] ?? []);
+            DebugToolbar::log("Route matched successfully", 'router');
             return;
         }
 
@@ -221,7 +263,7 @@ class Router
             $controllerObj = new $controllerClass();
 
             if (method_exists($controllerObj, $method)) {
-                $debugEnabled = class_exists('System\\Core\\Debug') && Env::get('APP_DEBUG') === 'true';
+                $debugEnabled = class_exists('System\\Core\\Debug') && Env::get('DEBUG_MODE') === 'true';
                 
                 if ($debugEnabled) {
                     $startTime = microtime(true);
@@ -280,16 +322,35 @@ class Router
         }
 
         $this->logError("{$code} {$message}");
-        echo "
+        
+        $errorConfig = $this->getErrorConfig($code);
+        
+        ?>
         <!DOCTYPE html>
-        <html lang='en'>
+        <html lang="en">
         <head>
-            <meta charset='UTF-8'>
-            <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-            <link rel='icon' href='favicon.ico' type='image/png'>
-            <title>{$code} - Xatolik</title>
-            <link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css'>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <meta http-equiv="X-UA-Compatible" content="ie=edge">
+            <meta name="generator" content="CodeIgniter Alternative">
+            <meta name="description" content="<?= $code ?> - <?= $errorConfig['title'] ?> - CodeIgniter Alternative Framework">
+            <link rel="icon" href="favicon.ico" type="image/png">
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+            <title><?= $code ?> - <?= $errorConfig['title'] ?> | CodeIgniter Alternative</title>
             <style>
+                :root {
+                    --ci-primary: #dd4814;
+                    --ci-primary-dark: #bf3c10;
+                    --ci-light: #f8f9fa;
+                    --ci-dark: #212529;
+                    --ci-border: #dee2e6;
+                    --ci-bg: #ffffff;
+                    --ci-text: #212529;
+                    --ci-text-muted: #6c757d;
+                    --error-color: <?= $errorConfig['color'] ?>;
+                    --error-color-dark: <?= $errorConfig['colorDark'] ?>;
+                }
+
                 * {
                     margin: 0;
                     padding: 0;
@@ -297,103 +358,352 @@ class Router
                 }
 
                 body {
-                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                    background-color: #f5f5f5;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+                    background: linear-gradient(135deg, var(--ci-light) 0%, var(--ci-bg) 100%);
+                    color: var(--ci-text);
+                    line-height: 1.6;
+                    min-height: 100vh;
                     display: flex;
-                    justify-content: center;
                     align-items: center;
-                    height: 100vh;
-                    margin: 0;
-                    color: #333;
+                    justify-content: center;
+                    padding: 20px;
                 }
 
                 .error-container {
-                    background-color: #fff;
-                    padding: 30px 20px;
-                    border-radius: 8px;
-                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-                    text-align: center;
-                    max-width: 420px;
+                    max-width: 500px;
                     width: 100%;
+                    text-align: center;
+                    animation: fadeInUp 0.8s ease-out;
                 }
 
-                .error-container h1 {
-                    font-size: 60px;
-                    color: #e74c3c;
-                    margin-bottom: 10px;
+                .error-content {
+                    background: var(--ci-bg);
+                    padding: 50px 30px;
+                    border-radius: 16px;
+                    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+                    border: 1px solid var(--ci-border);
                 }
 
-                .error-container h2 {
-                    font-size: 20px;
-                    color: #555;
-                    margin-bottom: 15px;
-                }
-
-                .error-container p {
-                    font-size: 14px;
-                    color: #777;
+                .error-code {
+                    font-size: 6rem;
+                    font-weight: 800;
+                    color: var(--error-color);
+                    line-height: 1;
                     margin-bottom: 20px;
+                    text-shadow: 4px 4px 0px rgba(0, 0, 0, 0.1);
+                    animation: pulse 2s infinite;
                 }
 
-                .error-container .button {
+                .error-title {
+                    font-size: 1.75rem;
+                    font-weight: 700;
+                    color: var(--ci-dark);
+                    margin-bottom: 16px;
+                }
+
+                .error-message {
+                    font-size: 1.125rem;
+                    color: var(--ci-text-muted);
+                    margin-bottom: 30px;
+                    line-height: 1.6;
+                }
+
+                .error-icon {
+                    font-size: 4rem;
+                    color: var(--error-color);
+                    margin-bottom: 20px;
+                    animation: bounce 2s infinite;
+                }
+
+                .error-actions {
+                    display: flex;
+                    gap: 12px;
+                    justify-content: center;
+                    flex-wrap: wrap;
+                }
+
+                .btn {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 8px;
+                    padding: 12px 24px;
+                    border-radius: 8px;
                     text-decoration: none;
-                    background-color: #3498db;
-                    color: #fff;
-                    font-size: 14px;
-                    padding: 8px 18px;
-                    border-radius: 5px;
-                    display: inline-block;
-                    transition: background-color 0.3s ease;
+                    font-weight: 600;
+                    font-size: 0.95rem;
+                    transition: all 0.3s ease;
+                    border: 2px solid transparent;
                 }
 
-                .error-container .button:hover {
-                    background-color: #2980b9;
+                .btn-primary {
+                    background: var(--error-color);
+                    color: white;
+                    border-color: var(--error-color);
                 }
 
-                .error-container .icon {
-                    font-size: 60px;
-                    color: #e74c3c;
-                    margin-bottom: 15px;
+                .btn-primary:hover {
+                    background: var(--error-color-dark);
+                    border-color: var(--error-color-dark);
+                    transform: translateY(-2px);
+                    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
                 }
 
-                @media (max-width: 600px) {
-                    .error-container h1 {
-                        font-size: 50px;
-                    }
+                .btn-secondary {
+                    background: transparent;
+                    color: var(--ci-text);
+                    border-color: var(--ci-border);
+                }
 
-                    .error-container h2 {
-                        font-size: 18px;
-                    }
+                .btn-secondary:hover {
+                    background: var(--ci-light);
+                    border-color: var(--error-color);
+                    transform: translateY(-2px);
+                }
 
-                    .error-container p {
-                        font-size: 12px;
-                    }
+                .footer {
+                    text-align: center;
+                    color: var(--ci-text-muted);
+                    margin-top: 30px;
+                    font-size: 0.85rem;
+                }
 
-                    .error-container .button {
-                        padding: 6px 12px;
-                        font-size: 12px;
-                    }
+                .footer a {
+                    color: var(--error-color);
+                    text-decoration: none;
+                    font-weight: 500;
+                }
 
-                    .error-container .icon {
-                        font-size: 50px;
+                .footer a:hover {
+                    text-decoration: underline;
+                }
+
+                @keyframes fadeInUp {
+                    from {
+                        opacity: 0;
+                        transform: translateY(30px);
+                    }
+                    to {
+                        opacity: 1;
+                        transform: translateY(0);
                     }
                 }
 
+                @keyframes bounce {
+                    0%, 20%, 50%, 80%, 100% {
+                        transform: translateY(0);
+                    }
+                    40% {
+                        transform: translateY(-10px);
+                    }
+                    60% {
+                        transform: translateY(-5px);
+                    }
+                }
+
+                @keyframes pulse {
+                    0% {
+                        transform: scale(1);
+                    }
+                    50% {
+                        transform: scale(1.05);
+                    }
+                    100% {
+                        transform: scale(1);
+                    }
+                }
+
+                @media (max-width: 768px) {
+                    .error-content {
+                        padding: 40px 24px;
+                    }
+
+                    .error-code {
+                        font-size: 5rem;
+                    }
+
+                    .error-title {
+                        font-size: 1.5rem;
+                    }
+
+                    .error-message {
+                        font-size: 1rem;
+                    }
+
+                    .error-icon {
+                        font-size: 3.5rem;
+                    }
+
+                    .error-actions {
+                        flex-direction: column;
+                        align-items: center;
+                    }
+
+                    .btn {
+                        width: 100%;
+                        max-width: 250px;
+                        justify-content: center;
+                    }
+                }
+
+                @media (max-width: 480px) {
+                    .error-code {
+                        font-size: 4rem;
+                    }
+
+                    .error-title {
+                        font-size: 1.25rem;
+                    }
+
+                    body {
+                        padding: 16px;
+                    }
+                }
             </style>
         </head>
         <body>
-            <div class='error-container'>
-                <div class='icon'>
-                    <i class='fas fa-exclamation-triangle'></i>
+            <div class="error-container">
+                <div class="error-content">
+                    <div class="error-icon">
+                        <i class="fas <?= $errorConfig['icon'] ?>"></i>
+                    </div>
+                    <div class="error-code"><?= $code ?></div>
+                    <h1 class="error-title"><?= $errorConfig['title'] ?></h1>
+                    <p class="error-message"><?= $errorConfig['message'] ?></p>
+                    
+                    <div class="error-actions">
+                        <a href="/" class="btn btn-primary">
+                            <i class="fas fa-home"></i> Go Home
+                        </a>
+                        <a href="javascript:history.back()" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left"></i> Go Back
+                        </a>
+                        <?php if ($code >= 500): ?>
+                        <a href="javascript:location.reload()" class="btn btn-secondary">
+                            <i class="fas fa-redo"></i> Try Again
+                        </a>
+                        <?php endif; ?>
+                    </div>
                 </div>
-                <h1>{$code}</h1>
-                <h2>Sorry, the request could not be processed.</h2>
-                <p>This page does not exist or the request was made incorrectly.</p>
-                <a href='/' class='button'>Return to home page</a>
+
+                <div class="footer">
+                    <p>&copy; <?= date("Y") ?> CodeIgniter Alternative Framework - v2.0.0</p>
+                    <p>PHP <?= PHP_VERSION ?> • Server: <?= $_SERVER['SERVER_SOFTWARE'] ?? 'Unknown' ?></p>
+                </div>
             </div>
+
+            <script>
+                document.addEventListener('DOMContentLoaded', function() {
+                    const errorCode = document.querySelector('.error-code');
+                    
+                    errorCode.addEventListener('click', function() {
+                        this.style.animation = 'none';
+                        setTimeout(() => {
+                            this.style.animation = 'pulse 2s infinite';
+                        }, 10);
+                    });
+
+                    document.addEventListener('keydown', function(e) {
+                        if (e.key === 'Escape') {
+                            window.history.back();
+                        } else if (e.key === 'Home' || e.key === 'h') {
+                            window.location.href = '/';
+                        }
+                        <?php if ($code >= 500): ?>
+                        else if (e.key === 'r' || e.key === 'F5') {
+                            location.reload();
+                        }
+                        <?php endif; ?>
+                    });
+
+                    console.log('%c<?= $errorConfig['consoleIcon'] ?> <?= $code ?> - <?= $errorConfig['title'] ?>', 'color: <?= $errorConfig['color'] ?>; font-size: 16px; font-weight: bold;');
+                    console.log('%c<?= $errorConfig['consoleMessage'] ?>', 'color: #6c757d;');
+                });
+            </script>
         </body>
         </html>
-        ";
+        <?php
+    }
+
+    /**
+     * Get error configuration based on error code
+     */
+    private function getErrorConfig($code)
+    {
+        $configs = [
+            400 => [
+                'title' => 'Bad Request',
+                'message' => 'The server cannot process the request due to a client error. Please check your request and try again.',
+                'icon' => 'fa-exclamation-triangle',
+                'color' => '#ffc107',
+                'colorDark' => '#e0a800',
+                'consoleIcon' => '⚠️',
+                'consoleMessage' => 'The server could not understand the request due to invalid syntax.'
+            ],
+            401 => [
+                'title' => 'Unauthorized',
+                'message' => 'Authentication is required to access this resource. Please log in and try again.',
+                'icon' => 'fa-user-lock',
+                'color' => '#ff6b35',
+                'colorDark' => '#e55a2b',
+                'consoleIcon' => '🔐',
+                'consoleMessage' => 'Authentication required for this resource.'
+            ],
+            403 => [
+                'title' => 'Forbidden',
+                'message' => 'You do not have permission to access this resource. Please contact the administrator if you believe this is an error.',
+                'icon' => 'fa-ban',
+                'color' => '#dc3545',
+                'colorDark' => '#c82333',
+                'consoleIcon' => '🚫',
+                'consoleMessage' => 'Access to this resource is forbidden.'
+            ],
+            404 => [
+                'title' => 'Page Not Found',
+                'message' => 'The page you\'re looking for doesn\'t exist or has been moved. Please check the URL or navigate back to the homepage.',
+                'icon' => 'fa-search',
+                'color' => '#6c757d',
+                'colorDark' => '#545b62',
+                'consoleIcon' => '🔍',
+                'consoleMessage' => 'The requested URL was not found on this server.'
+            ],
+            405 => [
+                'title' => 'Method Not Allowed',
+                'message' => 'The request method is not supported for this resource. Please check the HTTP method and try again.',
+                'icon' => 'fa-times-circle',
+                'color' => '#fd7e14',
+                'colorDark' => '#e56a00',
+                'consoleIcon' => '❌',
+                'consoleMessage' => 'The request method is not allowed for this resource.'
+            ],
+            500 => [
+                'title' => 'Internal Server Error',
+                'message' => 'The server encountered an unexpected condition. Our technical team has been notified and is working to resolve the issue.',
+                'icon' => 'fa-server',
+                'color' => '#dc3545',
+                'colorDark' => '#c82333',
+                'consoleIcon' => '🚨',
+                'consoleMessage' => 'The server encountered an unexpected condition.'
+            ],
+            503 => [
+                'title' => 'Service Unavailable',
+                'message' => 'The server is currently unable to handle the request due to maintenance or capacity problems. Please try again later.',
+                'icon' => 'fa-tools',
+                'color' => '#17a2b8',
+                'colorDark' => '#138496',
+                'consoleIcon' => '🔧',
+                'consoleMessage' => 'The server is temporarily unavailable.'
+            ]
+        ];
+
+        return $configs[$code] ?? [
+            'title' => 'Server Error',
+            'message' => 'An unexpected error occurred. Please try again later or contact support if the problem persists.',
+            'icon' => 'fa-exclamation-circle',
+            'color' => '#6c757d',
+            'colorDark' => '#545b62',
+            'consoleIcon' => '💥',
+            'consoleMessage' => 'An unexpected server error occurred.'
+        ];
     }
 
     /**
@@ -409,6 +719,14 @@ class Router
         $params = array_slice($segments, 2);
 
         $this->callControllerMethod($controller, $method, $params);
+    }
+
+    /**
+     * Get all registered routes (for debugging)
+     */
+    public function getRoutes()
+    {
+        return $this->routes;
     }
 }
 ?>
