@@ -1018,7 +1018,7 @@ class BaseModel
             return $this->db->getConnection()->prepare($sql);
         } catch (\PDOException $e) {
             $this->logError("Query failed: " . $e->getMessage());
-            throw new \Exception("So'rov bajarishda xatolik yuz berdi.");
+            throw new \Exception("An error occurred while executing the request.");
         }
     }
     
@@ -1030,7 +1030,7 @@ class BaseModel
             return $stmt;
         } catch (\PDOException $e) {
             $this->logError("Query failed: " . $e->getMessage(), $sql);
-            throw new \Exception("So'rov bajarishda xatolik yuz berdi.");
+            throw new \Exception("An error occurred while executing the request.");
         }
     }
 
@@ -1149,7 +1149,7 @@ class BaseModel
             return $result;
         } catch (\PDOException $e) {
             $this->logError("Query failed: " . $e->getMessage(), $sql);
-            throw new \Exception("So'rov bajarishda xatolik yuz berdi.");
+            throw new \Exception("An error occurred while executing the request.");
         }
     }
 
@@ -1206,7 +1206,7 @@ class BaseModel
             $createTableSQL = "CREATE TABLE IF NOT EXISTS {$tableName} ({$schema}) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;";
             $this->query($createTableSQL);
         } catch (\Exception $e) {
-            $this->logError("Jadvalni yaratishda xatolik: {$e->getMessage()}");
+            $this->logError("Error creating table: {$e->getMessage()}");
         }
     }
 
@@ -1224,7 +1224,7 @@ class BaseModel
             $this->db->getConnection()->beginTransaction();
         } catch (\PDOException $e) {
             $this->logError("Transaction begin failed: " . $e->getMessage());
-            throw new \Exception("Tranzaksiyani boshlashda xatolik yuz berdi.");
+            throw new \Exception("An error occurred while starting the transaction.");
         }
     }
 
@@ -1234,7 +1234,7 @@ class BaseModel
             $this->db->getConnection()->commit();
         } catch (\PDOException $e) {
             $this->logError("Transaction commit failed: " . $e->getMessage());
-            throw new \Exception("Tranzaksiyani tasdiqlashda xatolik yuz berdi.");
+            throw new \Exception("An error occurred while confirming the transaction.");
         }
     }
 
@@ -1244,7 +1244,7 @@ class BaseModel
             $this->db->getConnection()->rollBack();
         } catch (\PDOException $e) {
             $this->logError("Transaction rollback failed: " . $e->getMessage());
-            throw new \Exception("Tranzaksiyani bekor qilishda xatolik yuz berdi.");
+            throw new \Exception("An error occurred while canceling the transaction.");
         }
     }
 
