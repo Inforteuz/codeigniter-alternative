@@ -902,7 +902,7 @@ $router->group(['AuthMiddleware'], function($router) {
             
             <div style="text-align: center; margin-top: 40px;">
                 <a href="https://inforte.uz/codeigniter-alternative/" target="_blank" class="btn btn-primary" style="padding: 16px 40px; font-size: 1.1rem;">
-                    <i class="fas fa-external-link-alt"></i> View Full Documentation
+                    <i class="fas fa-external-link-alt"></i> View full documentation
                 </a>
             </div>
         </div>
