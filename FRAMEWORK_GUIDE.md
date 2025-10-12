@@ -1,260 +1,108 @@
-# CodeIgniter Alternative Framework - Developer guide
+# CodeIgniter Alternative Framework - Official Guide
 
-> **Version:** 2.0.0
-> **Author:** Oyatillo (Inforteuz)
-> **PHP Required:** 8.1.9+
-> **Architecture:** MVC Pattern with Custom Router & Middleware
-
----
-
-## 📑 Table of Contents
-
-1. [Overview](#-overview)
-2. [Framework Architecture](#-framework-architecture)
-3. [Directory Structure](#-directory-structure)
-4. [Request Lifecycle](#-request-lifecycle)
-5. [Getting Started](#-getting-started)
-6. [Core Components](#-core-components)
-7. [Routing System](#-routing-system)
-8. [Controllers](#-controllers)
-9. [Models & Database](#-models--database)
-10. [Views](#-views)
-11. [Middleware System](#-middleware-system)
-12. [Security Features](#-security-features)
-13. [Configuration & Environment](#-configuration--environment)
-14. [Error Handling & Debugging](#-error-handling--debugging)
-15. [Deployment Guide](#-deployment-guide)
-16. [Enhancement Recommendations](#-enhancement-recommendations)
+**Version:** 2.0.0
+**Author:** Oyatillo
+**PHP Requirement:** 8.1.9+
+**License:** MIT
 
 ---
 
-## 🎯 Overview
+## Table of Contents
 
-**CodeIgniter Alternative** adalah framework PHP custom yang dibangun dengan prinsip kesederhanaan dan performa tinggi. Framework ini mengadopsi pola MVC (Model-View-Controller) dengan tambahan sistem middleware dan routing yang fleksibel.
+1. [Introduction](#introduction)
+2. [Installation & Setup](#installation--setup)
+3. [Architecture Overview](#architecture-overview)
+4. [Routing System](#routing-system)
+5. [Controllers](#controllers)
+6. [Models](#models)
+7. [Views](#views)
+8. [Database Management](#database-management)
+9. [Middleware System](#middleware-system)
+10. [Caching](#caching)
+11. [Security Features](#security-features)
+12. [Debug & Error Handling](#debug--error-handling)
+13. [Best Practices](#best-practices)
+14. [API Reference](#api-reference)
+
+---
+
+## Introduction
+
+**CodeIgniter Alternative** is a lightweight, fast, and modern PHP MVC framework designed as an alternative to CodeIgniter. It combines the simplicity of CodeIgniter with modern PHP features and enhanced functionality.
 
 ### Key Features
 
-✅ **MVC Architecture** - Clean separation of concerns
-✅ **Custom Router** - URL routing dengan parameter dinamis
-✅ **Middleware System** - Pre/post request filtering
-✅ **Query Builder** - Powerful database abstraction layer
-✅ **CSRF Protection** - Built-in security features
-✅ **Debug Tools** - Comprehensive debugging interface
-✅ **Auto-migration** - Database schema versioning
-✅ **Environment Config** - `.env` based configuration
-
-### Design Patterns
-
-- **Singleton Pattern** - Database & Environment classes
-- **Front Controller Pattern** - Single entry point (`index.php`)
-- **Factory Pattern** - Model & Controller instantiation
-- **Middleware Pattern** - Request filtering chain
+- **MVC Architecture** - Clean separation of concerns
+- **Advanced Router** - Support for GET, POST, PUT, DELETE, PATCH with dynamic parameters
+- **Query Builder** - Laravel-inspired database query builder
+- **Middleware System** - Request filtering and authentication
+- **Built-in Caching** - File and array-based caching with tag support
+- **Debug Toolbar** - Comprehensive debugging with query tracking
+- **CSRF Protection** - Built-in security against CSRF attacks
+- **Migration System** - Database version control
+- **Environment Configuration** - .env file support
+- **Session Management** - Secure session handling
+- **Error Handling** - Professional error pages for production
 
 ---
 
-## 🏗 Framework Architecture
+## Installation & Setup
+
+### System Requirements
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                 HTTP REQUEST                        │
-└──────────────────┬──────────────────────────────────┘
-                   ↓
-         ┌─────────────────────┐
-         │    index.php        │ ← Front Controller
-         │  (Entry Point)      │
-         └──────────┬──────────┘
-                    ↓
-         ┌─────────────────────┐
-         │   autoloader.php    │ ← PSR-4-like Autoloading
-         │  (Class Loading)    │
-         └──────────┬──────────┘
-                    ↓
-         ┌─────────────────────┐
-         │     Router.php      │ ← Route Matching
-         │  (URL Dispatcher)   │
-         └──────────┬──────────┘
-                    ↓
-         ┌─────────────────────┐
-         │   Middleware(s)     │ ← Auth, CSRF, Rate Limit
-         │  (Request Filter)   │
-         └──────────┬──────────┘
-                    ↓
-         ┌─────────────────────┐
-         │    Controller       │ ← Business Logic
-         │  (HomeController)   │
-         └──────────┬──────────┘
-                    ↓
-         ┌─────────────────────┐
-         │       Model         │ ← Database Operations
-         │   (UserModel)       │
-         └──────────┬──────────┘
-                    ↓
-         ┌─────────────────────┐
-         │        View         │ ← Presentation Layer
-         │   (home/index.php)  │
-         └──────────┬──────────┘
-                    ↓
-┌─────────────────────────────────────────────────────┐
-│                 HTTP RESPONSE                       │
-└─────────────────────────────────────────────────────┘
+PHP >= 8.1.9
+MySQL >= 5.7
+Apache/Nginx with mod_rewrite
 ```
 
----
+### Installation Steps
 
-## 📂 Directory Structure
-
-| Directory/File | Purpose | Notes |
-|----------------|---------|-------|
-| **`app/`** | Application Layer | User-defined code |
-| ├─ `Controllers/` | HTTP request handlers | HomeController, UserController |
-| ├─ `Models/` | Database models | UserModel, etc. |
-| ├─ `Views/` | HTML templates | Blade-like syntax supported |
-| ├─ `Middlewares/` | Request filters | Auth, CSRF, RateLimit |
-| └─ `Database/` | Migrations & Seeds | Schema versioning |
-| **`system/`** | Framework Core | **DO NOT MODIFY** |
-| ├─ `Router.php` | Route dispatcher | Matches URLs to controllers |
-| ├─ `BaseController.php` | Controller parent class | Common controller methods |
-| ├─ `BaseModel.php` | Model parent class | Query builder & ORM-like |
-| ├─ `ErrorHandler.php` | Production error pages | Custom 404/500 handlers |
-| ├─ `Core/` | Core utilities | Auth, Debug, Env, Middleware |
-| ├─ `Database/` | DB connection layer | Singleton PDO wrapper |
-| └─ `Security/` | Security helpers | CSRF token management |
-| **`writable/`** | Runtime data | **Must be writable (777)** |
-| ├─ `logs/` | Error & debug logs | `error_YYYY-MM-DD.log` |
-| ├─ `cache/` | Cached data | Route/view cache |
-| ├─ `session/` | Session files | If file-based sessions |
-| └─ `uploads/` | Uploaded files | User uploads |
-| **`tests/`** | Unit & integration tests | PHPUnit tests |
-| **`autoloader.php`** | Class autoloader | PSR-4 style autoloading |
-| **`index.php`** | Front controller | Entry point for all requests |
-| **`.env`** | Environment config | DB credentials, debug mode |
-| **`composer.json`** | PHP dependencies | Package management |
-
----
-
-## 🔄 Request Lifecycle
-
-### Step-by-Step Execution Flow
-
-1. **User Request** → `http://example.com/user/profile`
-
-2. **`index.php`** (Entry Point)
-   - Loads `autoloader.php`
-   - Initializes `Env::load()` to parse `.env`
-   - Sets session cookie with secure flags
-   - Checks `APP_DEBUG` mode
-   - Runs auto-migrations via `MigrateController`
-   - Instantiates `Router` and calls `handleRequest()`
-
-3. **`autoloader.php`** (Class Loading)
-   - Registers `spl_autoload_register()`
-   - Maps namespaces:
-     - `App\Controllers\*` → `app/Controllers/*.php`
-     - `App\Models\*` → `app/Models/*.php`
-     - `System\*` → `system/*.php`
-
-4. **`Router::handleRequest()`**
-   - Parses URL: `/user/profile` → `['user', 'profile']`
-   - Matches against registered routes in `Router::__construct()`
-   - Extracts route parameters (if dynamic segments like `{id}`)
-   - Executes middleware stack (if defined)
-
-5. **Middleware Execution**
-   - Example: `AuthMiddleware::handle()`
-   - Returns `true` (continue) or `false` (block + redirect)
-   - On failure: calls `onFailure()` or `redirectTo()`
-
-6. **Controller Invocation**
-   - Instantiates: `new App\Controllers\UserController()`
-   - Calls method: `profile()`
-   - Controller extends `BaseController` (access to DB, view loader, etc.)
-
-7. **Model Interaction**
-   - Controller calls: `$this->model('UserModel')`
-   - Model queries database: `$userModel->find($userId)`
-   - Returns data to controller
-
-8. **View Rendering**
-   - Controller calls: `$this->view('user/profile', ['user' => $userData])`
-   - Loads: `app/Views/user/profile.php`
-   - Extracts variables with `extract($data)`
-   - Outputs HTML
-
-9. **Response Sent** → Browser displays page
-
----
-
-## 🚀 Getting Started
-
-### 1. Installation
-
-```bash
-# Clone repository
-git clone https://github.com/Inforteuz/codeigniter-alternative.git
-cd codeigniter-alternative
-
-# Install dependencies (if using Composer)
-composer install
-
-# Copy environment file
-cp .env.example .env
-```
-
-### 2. Configuration (`.env`)
+1. **Clone or Download** the framework
+2. **Configure .env file**:
 
 ```env
-# Application
-APP_NAME="MyApp"
+# Application Configuration
+APP_NAME="CodeIgniter Alternative"
 APP_ENV=development
 APP_DEBUG=true
 APP_URL=http://localhost
+TIMEZONE=Asia/Tashkent
 
-# Database
+# Database Configuration
 DB_HOST=localhost
-DB_NAME=my_database
+DB_NAME=your_database
 DB_USER=root
-DB_PASS=secret
+DB_PASS=your_password
 DB_CHARSET=utf8mb4
 
-# Timezone
-TIMEZONE=Asia/Tashkent
+# Cache Configuration
+CACHE_DRIVER=file
+
+# Debug Configuration
+DEBUG_MODE=true
 ```
 
-### 3. Database Setup
+3. **Set Permissions**:
 
 ```bash
-# Create database
-mysql -u root -p
-CREATE DATABASE my_database CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-```
-
-Migrations run automatically on every request (see `index.php` line 51).
-
-### 4. File Permissions
-
-```bash
-# Linux/macOS
-chmod -R 777 writable/
-chmod -R 755 system/
-
-# Or more secure approach
-chown -R www-data:www-data writable/
 chmod -R 755 writable/
+chmod -R 755 writable/cache/
+chmod -R 755 writable/logs/
+chmod -R 755 writable/session/
 ```
 
-### 5. Web Server Configuration
+4. **Configure Web Server**:
 
-**Apache (.htaccess)**
+**Apache (.htaccess)**:
 ```apache
-<IfModule mod_rewrite.c>
-    RewriteEngine On
-    RewriteCond %{REQUEST_FILENAME} !-f
-    RewriteCond %{REQUEST_FILENAME} !-d
-    RewriteRule ^(.*)$ index.php/$1 [L]
-</IfModule>
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ index.php [QSA,L]
 ```
 
-**Nginx**
+**Nginx**:
 ```nginx
 location / {
     try_files $uri $uri/ /index.php?$query_string;
@@ -263,375 +111,377 @@ location / {
 
 ---
 
-## 🧩 Core Components
+## Architecture Overview
 
-### 1. Router (`system/Router.php`)
+### Directory Structure
 
-**Purpose:** Maps URLs to controller methods.
-
-**Key Methods:**
-- `addRoute($method, $pattern, $controller, $action, $middlewares = [])`
-- `handleRequest()` - Processes incoming HTTP request
-- `matchRoute($method, $url)` - Finds matching route
-- `executeMiddlewares($middlewares)` - Runs middleware chain
-
-**Example: Define Routes**
-```php
-// In Router::__construct()
-$this->addRoute('GET', 'user/{id}', 'UserController', 'show');
-$this->addRoute('POST', 'user/update', 'UserController', 'update', ['AuthMiddleware']);
+```
+project/
+├── app/
+│   ├── Controllers/       # HTTP request handlers
+│   ├── Models/           # Database interaction layer
+│   ├── Views/            # Presentation layer
+│   ├── Middlewares/      # Request filters
+│   ├── Routes/           # Route definitions
+│   └── Database/
+│       ├── Migrations/   # Database migrations
+│       └── Seeds/        # Data seeders
+│
+├── system/
+│   ├── BaseController.php    # Base controller class
+│   ├── BaseModel.php         # Base model class
+│   ├── Router.php            # Routing engine
+│   ├── ErrorHandler.php      # Error management
+│   ├── Redirect.php          # Redirect utilities
+│   ├── Core/
+│   │   ├── Auth.php          # Authentication
+│   │   ├── Debug.php         # Debug utilities
+│   │   ├── DebugToolbar.php  # Debug toolbar
+│   │   ├── Env.php           # Environment loader
+│   │   └── Middleware.php    # Middleware manager
+│   ├── Cache/
+│   │   ├── Cache.php         # Cache manager
+│   │   ├── FileCache.php     # File cache driver
+│   │   ├── ArrayCache.php    # Array cache driver
+│   │   └── CacheHelper.php   # Cache utilities
+│   ├── Database/
+│   │   └── Database.php      # Database connection
+│   └── Security/
+│       └── Csrf.php          # CSRF protection
+│
+├── writable/
+│   ├── cache/           # Cache files
+│   ├── logs/            # Error & debug logs
+│   ├── session/         # Session files
+│   └── uploads/         # Uploaded files
+│
+├── index.php            # Entry point
+├── autoloader.php       # Class autoloader
+└── .env                 # Environment configuration
 ```
 
-**Dynamic Parameters:**
-```php
-// Route: 'post/{slug}/comment/{id}'
-// URL:   /post/hello-world/comment/42
-// Params: ['hello-world', '42']
+### Request Lifecycle
 
-public function showComment($slug, $commentId) {
-    // $slug = 'hello-world'
-    // $commentId = '42'
-}
 ```
-
-### 2. BaseController (`system/BaseController.php`)
-
-**Purpose:** Parent class for all controllers with helper methods.
-
-**Key Features:**
-
-#### Request Handling
-```php
-// Get POST data
-$email = $this->getPost('email');
-$allPost = $this->getPost(); // all POST data
-
-// Get GET data
-$page = $this->getGet('page', 1); // default = 1
-
-// Get from any method (POST/GET/PUT/etc)
-$name = $this->getVar('name');
-
-// Get JSON input
-$data = $this->getJSON();
-```
-
-#### Response Methods
-```php
-// JSON response
-$this->respondWithJSON(['status' => 'success'], 200);
-
-// HTTP status responses
-$this->respondCreated(['id' => 123]);
-$this->respondNoContent();
-$this->respondBadRequest('Invalid email');
-$this->respondUnauthorized();
-$this->respondNotFound('User not found');
-```
-
-#### Validation
-```php
-$this->setValidationRules([
-    'email' => 'required|valid_email',
-    'password' => 'required|min_length[8]',
-    'age' => 'required|integer'
-]);
-
-if ($this->validate($_POST)) {
-    // Valid
-} else {
-    $errors = $this->getValidationErrors();
-}
-```
-
-#### View Loading
-```php
-$this->view('user/profile', [
-    'user' => $userData,
-    'title' => 'User Profile'
-]);
-```
-
-#### Redirects
-```php
-$this->redirect()->to('/dashboard');
-```
-
-### 3. BaseModel (`system/BaseModel.php`)
-
-**Purpose:** Database abstraction with query builder.
-
-**Key Features:**
-
-#### Query Builder
-```php
-// SELECT
-$users = $this->select('id, name, email')
-              ->where(['active' => 1])
-              ->orderBy('created_at', 'DESC')
-              ->limit(10)
-              ->get();
-
-// WHERE conditions
-$this->where(['status' => 'active'])
-     ->orWhere(['role' => 'admin'])
-     ->get();
-
-// LIKE search
-$this->like('name', 'john')->get();
-
-// IN clause
-$this->whereIn('id', [1, 2, 3])->get();
-
-// BETWEEN
-$this->between('age', 18, 65)->get();
-
-// JOIN
-$this->select('users.*, profiles.bio')
-     ->join('profiles', 'profiles.user_id = users.id')
-     ->get();
-
-// GROUP BY & HAVING
-$this->select('category, COUNT(*) as total')
-     ->groupBy('category')
-     ->having('total > 5')
-     ->get();
-```
-
-#### CRUD Operations
-```php
-// Insert
-$id = $this->insert('users', [
-    'name' => 'John Doe',
-    'email' => 'john@example.com'
-]);
-
-// Update
-$this->update('users',
-    ['name' => 'Jane Doe'],
-    ['id' => 1]
-);
-
-// Delete
-$this->delete('users', ['id' => 1]);
-
-// Find by ID
-$user = $this->find(1);
-
-// Find first
-$user = $this->where(['email' => 'john@example.com'])->first();
-```
-
-#### Batch Operations
-```php
-// Insert multiple
-$this->insertBatch([
-    ['name' => 'User1', 'email' => 'u1@test.com'],
-    ['name' => 'User2', 'email' => 'u2@test.com']
-]);
-
-// Update multiple
-$this->updateBatch([
-    ['id' => 1, 'status' => 'active'],
-    ['id' => 2, 'status' => 'inactive']
-], 'id');
-```
-
-### 4. Database (`system/Database/Database.php`)
-
-**Purpose:** Singleton PDO wrapper for database connection.
-
-**Usage:**
-```php
-$db = Database::getInstance();
-
-// Raw query
-$users = $db->fetchAll("SELECT * FROM users WHERE active = ?", [1]);
-
-// Transactions
-$db->beginTransaction();
-try {
-    $db->insert('users', $userData);
-    $db->insert('profiles', $profileData);
-    $db->commit();
-} catch (Exception $e) {
-    $db->rollBack();
-}
+1. Browser Request
+   ↓
+2. index.php (Entry Point)
+   ↓
+3. autoloader.php (Load Classes)
+   ↓
+4. Router.php (Match Route)
+   ↓
+5. Middleware Execution
+   ↓
+6. Controller Method
+   ↓
+7. Model (Optional)
+   ↓
+8. View Rendering
+   ↓
+9. Response to Browser
 ```
 
 ---
 
-## 🛣 Routing System
+## Routing System
 
-### Defining Routes
+### Basic Routing
 
-**Location:** `system/Router.php` → `__construct()` method
+Routes are defined in `app/Routes/Routes.php`:
 
 ```php
-public function __construct()
+// GET route
+$router->get('home', 'HomeController', 'index');
+
+// POST route
+$router->post('login', 'AuthController', 'login');
+
+// PUT route
+$router->put('user/{id}', 'UserController', 'update');
+
+// DELETE route
+$router->delete('user/{id}', 'UserController', 'delete');
+
+// PATCH route
+$router->patch('user/{id}', 'UserController', 'patch');
+```
+
+### Dynamic Parameters
+
+```php
+// Single parameter
+$router->get('user/{id}', 'UserController', 'show');
+
+// Multiple parameters
+$router->get('post/{category}/{slug}', 'PostController', 'show');
+
+// Controller method receives parameters
+public function show($category, $slug)
 {
-    Env::load();
-
-    // Basic routes
-    $this->addRoute('GET', '', 'HomeController', 'index');
-    $this->addRoute('GET', 'about', 'PageController', 'about');
-
-    // Dynamic segments
-    $this->addRoute('GET', 'user/{id}', 'UserController', 'show');
-    $this->addRoute('GET', 'post/{slug}/comment/{id}', 'PostController', 'showComment');
-
-    // With middleware
-    $this->addRoute('GET', 'dashboard', 'DashboardController', 'index', ['AuthMiddleware']);
-    $this->addRoute('POST', 'admin/settings', 'AdminController', 'update', ['AuthMiddleware', 'CsrfMiddleware']);
-
-    // API routes
-    $this->addRoute('GET', 'api/user/{id}', 'ApiController', 'getUser');
-    $this->addRoute('POST', 'api/user', 'ApiController', 'createUser');
+    // $category and $slug are automatically passed
 }
 ```
 
-### Route Parameters
-
-Parameters are extracted and passed to controller methods:
+### Route Middleware
 
 ```php
-// Route: 'product/{category}/{id}'
-// URL:   /product/electronics/42
+// Single middleware
+$router->get('dashboard', 'DashboardController', 'index', ['AuthMiddleware']);
 
-public function show($category, $id) {
-    // $category = 'electronics'
-    // $id = '42'
-    echo "Category: $category, Product ID: $id";
-}
+// Multiple middlewares
+$router->get('admin', 'AdminController', 'index', ['AuthMiddleware', 'AdminMiddleware']);
 ```
 
-### Fallback Routing
+### Route Groups
 
-If no route matches, Router falls back to dynamic routing:
+```php
+// Apply middleware to multiple routes
+$router->group(['AuthMiddleware'], function($router) {
+    $router->get('profile', 'ProfileController', 'index');
+    $router->get('settings', 'SettingsController', 'index');
+    $router->post('logout', 'AuthController', 'logout');
+});
 
+// Nested groups
+$router->group(['AuthMiddleware'], function($router) {
+    $router->group(['AdminMiddleware'], function($router) {
+        $router->get('admin/users', 'AdminController', 'users');
+        $router->get('admin/settings', 'AdminController', 'settings');
+    });
+});
 ```
-URL: /user/profile/123
-     ↓
-Controller: UserController
-Method: profile()
-Params: [123]
+
+### Available HTTP Methods
+
+```php
+$router->get($uri, $controller, $method, $middlewares);
+$router->post($uri, $controller, $method, $middlewares);
+$router->put($uri, $controller, $method, $middlewares);
+$router->delete($uri, $controller, $method, $middlewares);
+$router->patch($uri, $controller, $method, $middlewares);
 ```
 
 ---
 
-## 🎮 Controllers
+## Controllers
 
-### Creating a Controller
+### Creating Controllers
 
-**File:** `app/Controllers/UserController.php`
+Controllers extend `BaseController` and are located in `app/Controllers/`:
 
 ```php
 <?php
+
 namespace App\Controllers;
 
 use System\BaseController;
-use App\Models\UserModel;
 
 class UserController extends BaseController
 {
-    private $userModel;
-
     public function __construct()
     {
         parent::__construct();
-        $this->userModel = new UserModel();
     }
 
     public function index()
     {
-        $users = $this->userModel->all('users');
-
-        $this->view('user/index', [
-            'users' => $users,
-            'title' => 'All Users'
+        $this->view('users/index', [
+            'title' => 'User List'
         ]);
     }
 
     public function show($id)
     {
-        $user = $this->userModel->find($id);
+        $userModel = $this->model('UserModel');
+        $user = $userModel->find($id);
 
-        if (!$user) {
-            $this->show404();
-            return;
-        }
-
-        $this->view('user/show', ['user' => $user]);
-    }
-
-    public function create()
-    {
-        if ($this->isMethod('POST')) {
-            $data = [
-                'name' => $this->getPost('name'),
-                'email' => $this->getPost('email'),
-                'password' => password_hash($this->getPost('password'), PASSWORD_BCRYPT)
-            ];
-
-            $this->setValidationRules([
-                'name' => 'required|min_length[3]',
-                'email' => 'required|valid_email',
-                'password' => 'required|min_length[8]'
-            ]);
-
-            if ($this->validate($_POST)) {
-                $id = $this->userModel->insert('users', $data);
-                $this->setFlash('success', 'User created successfully');
-                $this->redirect()->to('/user/' . $id);
-            } else {
-                $errors = $this->getValidationErrors();
-                $this->view('user/create', ['errors' => $errors]);
-            }
-        } else {
-            $this->view('user/create');
-        }
-    }
-
-    public function update($id)
-    {
-        $user = $this->userModel->find($id);
-
-        if (!$user) {
-            $this->respondNotFound('User not found');
-            return;
-        }
-
-        $data = [
-            'name' => $this->getPost('name'),
-            'email' => $this->getPost('email')
-        ];
-
-        $this->userModel->update('users', $data, ['id' => $id]);
-
-        $this->respondWithJSON([
-            'status' => 'success',
-            'message' => 'User updated'
+        $this->view('users/show', [
+            'user' => $user
         ]);
-    }
-
-    public function delete($id)
-    {
-        $this->userModel->delete('users', ['id' => $id]);
-        $this->redirect()->to('/users');
     }
 }
 ```
 
+### BaseController Methods
+
+#### View Rendering
+
+```php
+// Load view with data
+$this->view('view_name', ['key' => 'value']);
+
+// Example
+$this->view('home/index', [
+    'title' => 'Welcome',
+    'users' => $users
+]);
+```
+
+#### Redirects
+
+```php
+// Redirect to URL
+$this->to('/dashboard');
+
+// Redirect with method chaining
+$this->redirect()->to('/login');
+```
+
+#### Model Loading
+
+```php
+// Load model
+$userModel = $this->model('UserModel');
+
+// With alias
+$userModel = $this->model('UserModel', 'users');
+```
+
+#### Request Data
+
+```php
+// Get POST data
+$email = $this->getPost('email');
+$password = $this->getPost('password');
+
+// All POST data
+$data = $this->getPost();
+
+// GET data
+$search = $this->getGet('search');
+
+// Get from any method (POST, GET, PUT, etc.)
+$value = $this->getVar('field_name');
+
+// JSON input
+$data = $this->getJSON();
+```
+
+#### Validation
+
+```php
+// Set validation rules
+$this->setValidationRules([
+    'email' => 'required|valid_email',
+    'password' => 'required|min_length[6]',
+    'username' => 'required|alpha_numeric'
+]);
+
+// Validate data
+if ($this->validate($_POST)) {
+    // Validation passed
+} else {
+    $errors = $this->getValidationErrors();
+}
+```
+
+**Available Validation Rules:**
+- `required` - Field must not be empty
+- `valid_email` - Must be valid email
+- `min_length[n]` - Minimum length
+- `max_length[n]` - Maximum length
+- `numeric` - Must be numeric
+- `integer` - Must be integer
+- `alpha` - Only letters
+- `alpha_numeric` - Letters and numbers only
+
+#### Response Methods
+
+```php
+// JSON response
+$this->respondWithJSON(['status' => 'success'], 200);
+
+// Success responses
+$this->respondCreated(['id' => 123]);
+$this->respondNoContent();
+
+// Error responses
+$this->respondBadRequest('Invalid input');
+$this->respondUnauthorized('Login required');
+$this->respondForbidden('Access denied');
+$this->respondNotFound('Resource not found');
+$this->respondInternalError('Server error');
+```
+
+#### File Uploads
+
+```php
+$result = $this->uploadFile(
+    'fileInputName',
+    ['jpg', 'png', 'gif'],  // allowed extensions
+    10485760,                // max size (10MB)
+    'products'               // folder name
+);
+
+if (isset($result['success'])) {
+    $fileName = $result['fileName'];
+    $filePath = $result['filePath'];
+}
+```
+
+#### Flash Messages
+
+```php
+// Set flash message
+$this->setFlash('success', 'User created successfully');
+$this->setFlash('error', 'Something went wrong');
+
+// Get flash message (in view)
+$message = $this->getFlash('success');
+```
+
+#### Session Management
+
+```php
+// Set session
+$this->setSession('key', 'value');
+$this->setSession(['user_id' => 1, 'name' => 'John']);
+
+// Get session
+$userId = $this->getSession('user_id');
+
+// Remove session
+$this->unsetSession('key');
+$this->unsetSession(['key1', 'key2']);
+```
+
+#### Security
+
+```php
+// CSRF token
+$token = $this->generateCSRFToken();
+$isValid = $this->verifyCSRFToken($token);
+
+// XSS cleaning
+$clean = $this->xssClean($userInput);
+
+// Input sanitization
+$email = $this->sanitizeInput($_POST['email'], 'email');
+$age = $this->sanitizeInput($_POST['age'], 'int');
+```
+
+#### Debugging
+
+```php
+// Dump and die
+$this->dd($variable);
+
+// Dump without stopping
+$this->dd($variable, false);
+```
+
 ---
 
-## 🗄 Models & Database
+## Models
 
-### Creating a Model
+### Creating Models
 
-**File:** `app/Models/UserModel.php`
+Models extend `BaseModel` and are located in `app/Models/`:
 
 ```php
 <?php
+
 namespace App\Models;
 
 use System\BaseModel;
@@ -649,63 +499,345 @@ class UserModel extends BaseModel
     // Enable soft deletes
     protected $useSoftDeletes = true;
     protected $deletedField = 'deleted_at';
-
-    // Validation rules
-    protected $validationRules = [
-        'email' => 'required|valid_email',
-        'name' => 'required|min_length[3]'
-    ];
-
-    public function __construct()
-    {
-        parent::__construct();
-
-        // Add callbacks
-        $this->addCallback('beforeInsert', function(&$data) {
-            if (isset($data['password'])) {
-                $data['password'] = password_hash($data['password'], PASSWORD_BCRYPT);
-            }
-        });
-    }
-
-    /**
-     * Get active users
-     */
-    public function getActiveUsers()
-    {
-        return $this->select('id, name, email')
-                    ->where(['status' => 'active'])
-                    ->orderBy('created_at', 'DESC')
-                    ->get();
-    }
-
-    /**
-     * Search users by keyword
-     */
-    public function searchUsers($keyword)
-    {
-        return $this->select('*')
-                    ->like('name', $keyword, 'both')
-                    ->orWhere(['email' => $keyword])
-                    ->get();
-    }
-
-    /**
-     * Get user with profile
-     */
-    public function getUserWithProfile($userId)
-    {
-        return $this->select('users.*, profiles.bio, profiles.avatar')
-                    ->join('profiles', 'profiles.user_id = users.id', 'LEFT')
-                    ->where(['users.id' => $userId])
-                    ->first();
-    }
 }
 ```
 
-### Database Migrations
+### Query Builder
 
-**File:** `app/Database/Migrations/2024-01-01-000000_create_users_table.php`
+#### SELECT Queries
+
+```php
+// Get all records
+$users = $userModel->get();
+
+// Get first record
+$user = $userModel->first();
+
+// Find by ID
+$user = $userModel->find(1);
+
+// Select specific fields
+$users = $userModel->select('id, name, email')->get();
+
+// Select distinct
+$users = $userModel->distinct('email')->get();
+
+// Aggregate functions
+$maxAge = $userModel->selectMax('age')->first();
+$minAge = $userModel->selectMin('age')->first();
+$avgAge = $userModel->selectAvg('age')->first();
+$totalUsers = $userModel->selectCount()->first();
+```
+
+#### WHERE Clauses
+
+```php
+// Simple where
+$users = $userModel->where(['status' => 'active'])->get();
+
+// Multiple conditions
+$users = $userModel
+    ->where(['status' => 'active', 'role' => 'admin'])
+    ->get();
+
+// OR where
+$users = $userModel
+    ->where(['status' => 'active'])
+    ->orWhere(['status' => 'pending'])
+    ->get();
+
+// Comparison operators
+$users = $userModel->where(['age >' => 18])->get();
+$users = $userModel->where(['age <=' => 65])->get();
+$users = $userModel->where(['status !=' => 'deleted'])->get();
+
+// IN clause
+$users = $userModel->whereIn('id', [1, 2, 3, 4])->get();
+
+// NOT IN clause
+$users = $userModel->whereNotIn('role', ['guest', 'banned'])->get();
+
+// LIKE searches
+$users = $userModel->like('name', 'John', 'both')->get();
+$users = $userModel->like('email', '@gmail.com', 'before')->get();
+
+// NOT LIKE
+$users = $userModel->notLike('name', 'test')->get();
+
+// BETWEEN
+$users = $userModel->between('age', 18, 65)->get();
+
+// NOT BETWEEN
+$users = $userModel->notBetween('age', 0, 17)->get();
+```
+
+#### JOIN Operations
+
+```php
+// Inner join
+$users = $userModel
+    ->join('profiles', 'users.id = profiles.user_id')
+    ->get();
+
+// Left join
+$users = $userModel
+    ->leftJoin('profiles', 'users.id = profiles.user_id')
+    ->get();
+
+// Right join
+$users = $userModel
+    ->rightJoin('profiles', 'users.id = profiles.user_id')
+    ->get();
+
+// Multiple joins
+$users = $userModel
+    ->join('profiles', 'users.id = profiles.user_id')
+    ->join('companies', 'users.company_id = companies.id')
+    ->get();
+```
+
+#### GROUP BY & HAVING
+
+```php
+// Group by
+$stats = $userModel
+    ->select('role, COUNT(*) as count')
+    ->groupBy('role')
+    ->get();
+
+// Having clause
+$stats = $userModel
+    ->select('role, COUNT(*) as count')
+    ->groupBy('role')
+    ->having('count > 10')
+    ->get();
+```
+
+#### ORDER BY & LIMIT
+
+```php
+// Order by
+$users = $userModel->orderBy('created_at', 'DESC')->get();
+
+// Multiple order by
+$users = $userModel
+    ->orderBy('status', 'ASC')
+    ->orderBy('created_at', 'DESC')
+    ->get();
+
+// Random order
+$users = $userModel->orderByRandom()->get();
+
+// Limit
+$users = $userModel->limit(10)->get();
+
+// Limit with offset
+$users = $userModel->limit(10, 20)->get();
+```
+
+### INSERT Operations
+
+```php
+// Insert single record
+$userId = $userModel->insert('users', [
+    'name' => 'John Doe',
+    'email' => 'john@example.com',
+    'password' => password_hash('secret', PASSWORD_DEFAULT)
+]);
+
+// Insert batch (multiple records)
+$inserted = $userModel->insertBatch([
+    ['name' => 'User 1', 'email' => 'user1@example.com'],
+    ['name' => 'User 2', 'email' => 'user2@example.com'],
+    ['name' => 'User 3', 'email' => 'user3@example.com']
+]);
+```
+
+### UPDATE Operations
+
+```php
+// Update record
+$updated = $userModel->update('users',
+    ['status' => 'active'],
+    ['id' => 1]
+);
+
+// Update with query builder
+$userModel
+    ->where(['id' => 1])
+    ->update('users', ['status' => 'active'], ['id' => 1]);
+
+// Update batch
+$updated = $userModel->updateBatch([
+    ['id' => 1, 'status' => 'active'],
+    ['id' => 2, 'status' => 'inactive'],
+    ['id' => 3, 'status' => 'pending']
+], 'id');
+```
+
+### DELETE Operations
+
+```php
+// Delete record
+$userModel->delete('users', ['id' => 1]);
+
+// Soft delete (if enabled)
+$userModel->softDelete(1);
+
+// Restore soft deleted
+$userModel->restore(1);
+
+// Include soft deleted in query
+$users = $userModel->withDeleted()->get();
+
+// Only soft deleted records
+$users = $userModel->onlyDeleted()->get();
+```
+
+### Advanced Features
+
+#### Pagination
+
+```php
+// Paginate results
+$perPage = 20;
+$currentPage = $this->getGet('page', 1);
+
+$pagination = $this->paginate($totalRecords, $perPage, $currentPage, '/users');
+
+// In view
+foreach ($pagination['links'] as $link) {
+    echo "<a href='{$link['url']}'>{$link['page']}</a>";
+}
+```
+
+#### Search
+
+```php
+// Search across multiple fields
+$users = $userModel
+    ->search($searchTerm, ['name', 'email', 'phone'])
+    ->get();
+```
+
+#### Filtering
+
+```php
+// Apply multiple filters
+$users = $userModel
+    ->filter([
+        'status' => 'active',
+        'role' => 'admin',
+        'country' => 'USA'
+    ])
+    ->get();
+```
+
+#### Model Events
+
+```php
+// Add before insert callback
+$userModel->addCallback('beforeInsert', function(&$data) {
+    $data['created_by'] = $_SESSION['user_id'] ?? null;
+});
+
+// Add after insert callback
+$userModel->addCallback('afterInsert', function(&$data) {
+    // Send welcome email
+});
+```
+
+---
+
+## Views
+
+Views are located in `app/Views/` and use PHP templates.
+
+### Creating Views
+
+**app/Views/users/index.php:**
+
+```php
+<!DOCTYPE html>
+<html>
+<head>
+    <title><?= $title ?></title>
+</head>
+<body>
+    <h1><?= $title ?></h1>
+
+    <table>
+        <?php foreach ($users as $user): ?>
+        <tr>
+            <td><?= htmlspecialchars($user['name']) ?></td>
+            <td><?= htmlspecialchars($user['email']) ?></td>
+        </tr>
+        <?php endforeach; ?>
+    </table>
+</body>
+</html>
+```
+
+### Loading Views
+
+```php
+// In controller
+$this->view('users/index', [
+    'title' => 'User List',
+    'users' => $users
+]);
+```
+
+### View Best Practices
+
+1. **Always escape output** to prevent XSS:
+```php
+<?= htmlspecialchars($userInput) ?>
+```
+
+2. **Use short tags** for cleaner templates:
+```php
+<?= $variable ?>  // Instead of <?php echo $variable; ?>
+```
+
+3. **Organize views** in subdirectories:
+```
+app/Views/
+├── users/
+│   ├── index.php
+│   ├── show.php
+│   └── edit.php
+├── layouts/
+│   ├── header.php
+│   └── footer.php
+└── errors/
+    ├── 404.php
+    └── 500.php
+```
+
+---
+
+## Database Management
+
+### Database Configuration
+
+Configure in `.env`:
+
+```env
+DB_HOST=localhost
+DB_NAME=your_database
+DB_USER=root
+DB_PASS=your_password
+DB_CHARSET=utf8mb4
+```
+
+### Migrations
+
+Migrations are database version control, located in `app/Database/Migrations/`.
+
+#### Creating Migrations
+
+**app/Database/Migrations/2024-01-01-120000_create_users_table.php:**
 
 ```php
 <?php
@@ -718,16 +850,14 @@ class CreateUsersTable
 
         $sql = "CREATE TABLE IF NOT EXISTS users (
             id INT AUTO_INCREMENT PRIMARY KEY,
-            name VARCHAR(255) NOT NULL,
-            email VARCHAR(255) UNIQUE NOT NULL,
+            name VARCHAR(100) NOT NULL,
+            email VARCHAR(150) UNIQUE NOT NULL,
             password VARCHAR(255) NOT NULL,
             status ENUM('active', 'inactive') DEFAULT 'active',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            deleted_at TIMESTAMP NULL,
-            INDEX idx_email (email),
-            INDEX idx_status (status)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+            deleted_at TIMESTAMP NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
 
         $db->execute($sql);
     }
@@ -740,698 +870,475 @@ class CreateUsersTable
 }
 ```
 
----
+#### Running Migrations
 
-## 🖼 Views
-
-### Basic View
-
-**File:** `app/Views/home/index.php`
+Migrations automatically run on every request via `MigrateController`. To disable auto-migration, remove this from `index.php`:
 
 ```php
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title><?= htmlspecialchars($title ?? 'Home') ?></title>
-</head>
-<body>
-    <h1>Welcome to <?= htmlspecialchars($title) ?></h1>
-
-    <?php if (isset($users) && count($users) > 0): ?>
-        <ul>
-        <?php foreach ($users as $user): ?>
-            <li>
-                <a href="/user/<?= $user['id'] ?>">
-                    <?= htmlspecialchars($user['name']) ?>
-                </a>
-            </li>
-        <?php endforeach; ?>
-        </ul>
-    <?php else: ?>
-        <p>No users found.</p>
-    <?php endif; ?>
-</body>
-</html>
+$migrateController = new \App\Controllers\MigrateController();
+$migrateController->migrate();
 ```
 
-### Loading Views in Controller
+### Raw Queries
 
 ```php
-$this->view('home/index', [
-    'title' => 'Home Page',
-    'users' => $users
-]);
+// Execute query
+$db = \System\Database\Database::getInstance();
+$result = $db->query("SELECT * FROM users WHERE status = ?", ['active']);
+
+// Fetch single row
+$user = $db->fetch("SELECT * FROM users WHERE id = ?", [1]);
+
+// Fetch all rows
+$users = $db->fetchAll("SELECT * FROM users");
+```
+
+### Transactions
+
+```php
+$db->beginTransaction();
+
+try {
+    $db->insert('users', $userData);
+    $db->insert('profiles', $profileData);
+
+    $db->commit();
+} catch (Exception $e) {
+    $db->rollBack();
+}
 ```
 
 ---
 
-## 🛡 Middleware System
+## Middleware System
 
-### Available Middleware
+Middleware filters HTTP requests. Located in `app/Middlewares/`.
 
-| Middleware | Purpose | Usage |
-|------------|---------|-------|
-| `AuthMiddleware` | Check user authentication | Protected routes |
-| `GuestMiddleware` | Check if user is NOT logged in | Login/register pages |
-| `CsrfMiddleware` | CSRF token validation | POST/PUT/DELETE requests |
-| `CorsMiddleware` | CORS headers | API routes |
-| `RateLimitMiddleware` | Rate limiting | Prevent abuse |
-| `LanguageMiddleware` | Language detection | Multi-language apps |
-| `MaintenanceMiddleware` | Maintenance mode | Site maintenance |
+### Creating Middleware
 
-### Creating Custom Middleware
-
-**File:** `app/Middlewares/AdminMiddleware.php`
+**app/Middlewares/AuthMiddleware.php:**
 
 ```php
 <?php
+
 namespace App\Middlewares;
 
 use System\BaseController;
 
-class AdminMiddleware extends BaseController
+class AuthMiddleware extends BaseController
 {
     public function handle()
     {
-        // Check if user is admin
-        if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
-            return false;
+        // Check if user is logged in
+        if (!$this->isAuthenticated()) {
+            return false; // Block request
         }
 
-        return true;
+        return true; // Allow request
     }
 
     public function redirectTo()
     {
-        return '/403';
+        return '/login';
     }
 
     public function onFailure()
     {
-        $this->setFlash('error', 'Access denied. Admin only.');
+        $this->setFlash('error', 'Please login first');
     }
 }
 ```
 
-### Using Middleware in Routes
+### Applying Middleware
+
+#### To Single Route
 
 ```php
-// Single middleware
-$this->addRoute('GET', 'admin/dashboard', 'AdminController', 'index', ['AdminMiddleware']);
+$router->get('dashboard', 'DashboardController', 'index', ['AuthMiddleware']);
+```
 
-// Multiple middlewares
-$this->addRoute('POST', 'admin/user/delete', 'AdminController', 'deleteUser', [
-    'AuthMiddleware',
-    'AdminMiddleware',
-    'CsrfMiddleware'
-]);
+#### To Multiple Routes
+
+```php
+$router->group(['AuthMiddleware'], function($router) {
+    $router->get('profile', 'ProfileController', 'index');
+    $router->get('settings', 'SettingsController', 'index');
+});
+```
+
+### Built-in Middleware
+
+#### AuthMiddleware
+Checks if user is authenticated.
+
+#### GuestMiddleware
+Allows only guests (non-authenticated users).
+
+#### CsrfMiddleware
+Validates CSRF tokens on POST requests.
+
+#### RateLimitMiddleware
+Limits requests per IP (100 per hour by default).
+
+#### CorsMiddleware
+Handles CORS headers for API requests.
+
+#### LanguageMiddleware
+Detects and sets application language.
+
+#### MaintenanceMiddleware
+Shows maintenance page when enabled in `.env`.
+
+---
+
+## Caching
+
+The framework provides a powerful caching system with multiple drivers.
+
+### Configuration
+
+In `.env`:
+
+```env
+CACHE_DRIVER=file  # file, array, redis
+```
+
+### Basic Usage
+
+```php
+use System\Cache\Cache;
+
+// Store data
+Cache::put('key', 'value', 3600); // 1 hour
+
+// Retrieve data
+$value = Cache::get('key');
+
+// Remember (get or store)
+$users = Cache::remember('users', 3600, function() {
+    return $userModel->all();
+});
+
+// Check existence
+if (Cache::has('key')) {
+    // Key exists
+}
+
+// Delete
+Cache::forget('key');
+
+// Clear all
+Cache::flush();
+```
+
+### Controller Caching
+
+```php
+// In controller
+$users = $this->cache('users', function() use ($userModel) {
+    return $userModel->all();
+}, 3600);
+
+// Or use Cache facade
+$users = $this->cache('users');
+if (!$users) {
+    $users = $userModel->all();
+    $this->cache('users', $users, 3600);
+}
+```
+
+### Tagged Cache
+
+```php
+use System\Cache\CacheHelper;
+
+// Store with tags
+$data = CacheHelper::cacheTags()
+    ->tag(['users', 'active'])
+    ->remember('active_users', 3600, function() {
+        return $userModel->where(['status' => 'active'])->get();
+    });
+
+// Flush by tag
+CacheHelper::flushTag('users');
+```
+
+### Cache Statistics
+
+```php
+$stats = Cache::getStats();
+// Returns: hits, misses, writes, deletes, items_count
 ```
 
 ---
 
-## 🔐 Security Features
+## Security Features
 
-### 1. CSRF Protection
+### CSRF Protection
 
-**Generate Token:**
+#### Generate Token
+
 ```php
-// In your form view
-<form method="POST" action="/user/create">
-    <input type="hidden" name="_csrf" value="<?= \System\Security\Csrf::generateToken() ?>">
-    <!-- Other fields -->
+use System\Security\Csrf;
+
+$token = Csrf::generateToken();
+```
+
+#### In Forms
+
+```php
+<form method="POST">
+    <input type="hidden" name="_csrf" value="<?= Csrf::getToken() ?>">
+    <!-- form fields -->
 </form>
 ```
 
-**Verify Token:**
+#### Verify Token
+
 ```php
-// In CsrfMiddleware (automatic)
-// Or manually:
-if (\System\Security\Csrf::verifyToken($_POST['_csrf'])) {
-    // Valid
+if (Csrf::verifyToken($_POST['_csrf'])) {
+    // Token valid
 }
 ```
 
-### 2. Input Sanitization
+### XSS Protection
 
 ```php
-// Sanitize string
-$clean = $this->sanitizeInput($_POST['name'], 'string');
+// In controller
+$clean = $this->xssClean($userInput);
 
+// In views - always escape output
+<?= htmlspecialchars($userInput) ?>
+```
+
+### Input Sanitization
+
+```php
 // Sanitize email
 $email = $this->sanitizeInput($_POST['email'], 'email');
 
 // Sanitize integer
-$id = $this->sanitizeInput($_POST['id'], 'int');
+$age = $this->sanitizeInput($_POST['age'], 'int');
+
+// Sanitize float
+$price = $this->sanitizeInput($_POST['price'], 'float');
+
+// Sanitize URL
+$website = $this->sanitizeInput($_POST['website'], 'url');
 ```
 
-### 3. XSS Protection
+### Password Hashing
 
 ```php
-// Clean XSS
-$safe = $this->xssClean($userInput);
+// Hash password
+$hashedPassword = password_hash($password, PASSWORD_DEFAULT);
 
-// In views, always escape output
-<?= htmlspecialchars($user['name']) ?>
-```
-
-### 4. SQL Injection Prevention
-
-```php
-// Always use prepared statements
-$stmt = $this->prepare("SELECT * FROM users WHERE email = ?");
-$stmt->execute([$email]);
-
-// Or use query builder (automatic escaping)
-$user = $this->where(['email' => $email])->first();
+// Verify password
+if (password_verify($inputPassword, $hashedPassword)) {
+    // Password correct
+}
 ```
 
 ---
 
-## ⚙ Configuration & Environment
+## Debug & Error Handling
 
-### Environment Variables (`.env`)
+### Debug Toolbar
 
-```env
-# Application Settings
-APP_NAME="My Application"
-APP_ENV=production
-APP_DEBUG=false
-APP_URL=https://example.com
-TIMEZONE=Asia/Tashkent
+When `DEBUG_MODE=true` in `.env`, a debug toolbar appears at the bottom showing:
 
-# Database Configuration
-DB_HOST=localhost
-DB_NAME=production_db
-DB_USER=db_user
-DB_PASS=SecurePassword123
-DB_CHARSET=utf8mb4
+- Execution time
+- Memory usage
+- Database queries with backtrace
+- Route information
+- Request details
+- System logs
 
-# Maintenance Mode
-APP_MAINTENANCE=false
-MAINTENANCE_ESTIMATED_TIME="2 hours"
-```
-
-### Accessing Environment Variables
+### Logging
 
 ```php
-use System\Core\Env;
+// Error logging (automatic)
+$this->logError('Error message');
 
-// Get single value
-$dbHost = Env::get('DB_HOST', 'localhost');
-
-// Get all values
-$allEnv = Env::getAll();
-
-// Set value at runtime
-Env::set('CUSTOM_VAR', 'value');
-
-// Database config
-$dbConfig = Env::getDatabaseConfig();
-// Returns: ['host' => '...', 'database' => '...', etc.]
+// Debug logging
+$this->logDebug('Debug information');
 ```
 
----
-
-## 🐛 Error Handling & Debugging
-
-### Debug Mode
-
-**Enable in `.env`:**
-```env
-APP_DEBUG=true
-```
-
-**Features:**
-- Detailed error pages with stack trace
-- Query logging
-- Memory usage tracking
-- Execution time profiling
-
-### Debug Methods
-
-```php
-// Dump and die
-$this->dd($data);
-
-// Log debug message
-$this->logDebug('Custom debug message');
-
-// Log error
-$this->logError('Error occurred');
-```
+Logs are stored in `writable/logs/error_YYYY-MM-DD.log`.
 
 ### Error Pages
 
-**Custom Error Pages:** `app/Views/errors/`
+Custom error pages in `app/Views/errors/`:
 
 - `404.php` - Not Found
 - `500.php` - Internal Server Error
 - `403.php` - Forbidden
 
-**Example: `404.php`**
-```php
-<!DOCTYPE html>
-<html>
-<head>
-    <title>404 - Page Not Found</title>
-</head>
-<body>
-    <h1>Oops! Page not found.</h1>
-    <p>The page you're looking for doesn't exist.</p>
-    <a href="/">Go Home</a>
-</body>
-</html>
+### Production vs Development
+
+**Development (.env):**
+```env
+APP_ENV=development
+APP_DEBUG=true
+DEBUG_MODE=true
 ```
+
+**Production (.env):**
+```env
+APP_ENV=production
+APP_DEBUG=false
+DEBUG_MODE=false
+```
+
+In production, errors show user-friendly pages instead of debug information.
 
 ---
 
-## 🚀 Deployment Guide
+## Best Practices
 
-### Pre-Deployment Checklist
+### 1. Code Organization
 
-✅ Set `APP_DEBUG=false` in `.env`
-✅ Set `APP_ENV=production`
-✅ Configure production database
-✅ Set secure passwords
-✅ Configure SSL/HTTPS
-✅ Set proper file permissions
-✅ Enable OPcache
-✅ Configure web server
-
-### Apache Configuration
-
-**`.htaccess` (root directory):**
-```apache
-<IfModule mod_rewrite.c>
-    RewriteEngine On
-    RewriteBase /
-
-    # Redirect to HTTPS (optional)
-    # RewriteCond %{HTTPS} off
-    # RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
-
-    # Serve existing files/directories directly
-    RewriteCond %{REQUEST_FILENAME} !-f
-    RewriteCond %{REQUEST_FILENAME} !-d
-
-    # Route all other requests to index.php
-    RewriteRule ^(.*)$ index.php/$1 [L,QSA]
-</IfModule>
-
-# Security Headers
-<IfModule mod_headers.c>
-    Header set X-Content-Type-Options "nosniff"
-    Header set X-Frame-Options "SAMEORIGIN"
-    Header set X-XSS-Protection "1; mode=block"
-    Header set Referrer-Policy "strict-origin-when-cross-origin"
-</IfModule>
-
-# Disable directory listing
-Options -Indexes
-
-# Protect .env file
-<Files .env>
-    Order allow,deny
-    Deny from all
-</Files>
-```
-
-### Nginx Configuration
-
-**`/etc/nginx/sites-available/yoursite`:**
-```nginx
-server {
-    listen 80;
-    listen [::]:80;
-    server_name example.com www.example.com;
-
-    # Redirect HTTP to HTTPS
-    return 301 https://$host$request_uri;
-}
-
-server {
-    listen 443 ssl http2;
-    listen [::]:443 ssl http2;
-    server_name example.com www.example.com;
-
-    root /var/www/html/yourproject;
-    index index.php index.html;
-
-    # SSL Certificates
-    ssl_certificate /path/to/certificate.crt;
-    ssl_certificate_key /path/to/private.key;
-
-    # Security headers
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header X-XSS-Protection "1; mode=block" always;
-
-    # Logging
-    access_log /var/log/nginx/yoursite_access.log;
-    error_log /var/log/nginx/yoursite_error.log;
-
-    # Main location block
-    location / {
-        try_files $uri $uri/ /index.php?$query_string;
-    }
-
-    # PHP-FPM configuration
-    location ~ \.php$ {
-        include snippets/fastcgi-php.conf;
-        fastcgi_pass unix:/var/run/php/php8.1-fpm.sock;
-        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-        include fastcgi_params;
-    }
-
-    # Deny access to .env and other sensitive files
-    location ~ /\.(env|git|svn|htaccess) {
-        deny all;
-        return 404;
-    }
-
-    # Deny access to writable/logs
-    location ~ ^/writable/logs/ {
-        deny all;
-        return 404;
-    }
-
-    # Static files caching
-    location ~* \.(jpg|jpeg|png|gif|ico|css|js|svg|woff|woff2|ttf|eot)$ {
-        expires 30d;
-        add_header Cache-Control "public, immutable";
-    }
-}
-```
-
-### File Permissions
-
-```bash
-# Application files (read-only)
-find . -type f -exec chmod 644 {} \;
-find . -type d -exec chmod 755 {} \;
-
-# Writable directory (for logs, cache, uploads)
-chmod -R 775 writable/
-chown -R www-data:www-data writable/
-
-# If using SELinux
-chcon -R -t httpd_sys_rw_content_t writable/
-```
-
-### PHP Configuration (php.ini)
-
-```ini
-# Production settings
-display_errors = Off
-log_errors = On
-error_log = /var/log/php_errors.log
-
-# Security
-expose_php = Off
-allow_url_fopen = Off
-allow_url_include = Off
-
-# Performance
-memory_limit = 256M
-max_execution_time = 60
-upload_max_filesize = 20M
-post_max_size = 25M
-
-# OPcache (recommended)
-opcache.enable = 1
-opcache.memory_consumption = 128
-opcache.max_accelerated_files = 10000
-opcache.revalidate_freq = 60
-```
-
----
-
-## 📈 Enhancement Recommendations
-
-### Priority 1 (Critical) - Security & Standards
-
-| Enhancement | Description | Benefit | Effort |
-|-------------|-------------|---------|--------|
-| **PSR-4 Autoloading** | Replace custom autoloader with Composer's PSR-4 | Standard compliance, better performance | Medium |
-| **Prepared Statements Everywhere** | Audit all queries to ensure parameterized queries | Prevent SQL injection | Low |
-| **Password Hashing** | Use `PASSWORD_ARGON2ID` instead of `PASSWORD_BCRYPT` | Stronger password security | Low |
-| **Input Validation Library** | Integrate validation library (e.g., Respect/Validation) | Robust validation | Medium |
-| **HTTPS Enforcement** | Force HTTPS in production | Data encryption in transit | Low |
-| **Content Security Policy** | Add CSP headers | XSS protection | Medium |
-| **Rate Limiting Improvement** | Store rate limits in Redis/Memcached instead of session | Scalable rate limiting | High |
-
-### Priority 2 (Important) - Performance & Scalability
-
-| Enhancement | Description | Benefit | Effort |
-|-------------|-------------|---------|--------|
-| **Route Caching** | Cache compiled routes to file | Faster route matching | Medium |
-| **Query Caching** | Implement query result caching | Reduce DB load | Medium |
-| **Lazy Loading Models** | Load models only when needed | Reduced memory usage | Low |
-| **Database Connection Pooling** | Use persistent connections | Better DB performance | Low |
-| **View Caching** | Cache compiled views | Faster page rendering | Medium |
-| **Asset Pipeline** | Minify and combine CSS/JS | Faster page loads | High |
-
-### Priority 3 (Nice to Have) - Developer Experience
-
-| Enhancement | Description | Benefit | Effort |
-|-------------|-------------|---------|--------|
-| **CLI Tool (Artisan-like)** | Command-line tool for tasks | Easier development workflow | High |
-| **ORM Layer** | Implement full ORM (like Eloquent) | More intuitive database operations | High |
-| **Template Engine** | Integrate Twig or Blade | Cleaner view syntax | Medium |
-| **Dependency Injection** | Add DI container | Better code organization | High |
-| **Event System** | Implement event dispatcher | Decoupled architecture | Medium |
-| **API Resource Classes** | Transform models to API responses | Consistent API responses | Medium |
-| **Testing Suite** | Add unit/integration tests | Code quality assurance | High |
-| **Documentation Generator** | Auto-generate API docs | Better documentation | Medium |
-
-### Specific Code Improvements
-
-#### 1. Replace Custom Autoloader with Composer PSR-4
-
-**Current (`autoloader.php`):**
 ```php
-spl_autoload_register(function ($class) {
-    // Custom logic...
+// Use namespaces
+namespace App\Controllers;
+
+// Follow PSR standards
+class UserController extends BaseController
+{
+    // Clear method names
+    public function index() { }
+    public function show($id) { }
+    public function store() { }
+}
+```
+
+### 2. Security
+
+```php
+// Always validate input
+$this->validate($_POST, [
+    'email' => 'required|valid_email',
+    'password' => 'required|min_length[8]'
+]);
+
+// Always escape output
+<?= htmlspecialchars($data) ?>
+
+// Use prepared statements (automatic in framework)
+$userModel->where(['email' => $email])->first();
+```
+
+### 3. Performance
+
+```php
+// Use caching for expensive operations
+$data = Cache::remember('expensive_query', 3600, function() {
+    return $this->complexDatabaseQuery();
 });
+
+// Lazy load models
+$userModel = $this->model('UserModel');
+
+// Use query builder instead of raw queries
 ```
 
-**Recommended (`composer.json`):**
-```json
-{
-    "autoload": {
-        "psr-4": {
-            "App\\": "app/",
-            "System\\": "system/"
-        }
-    }
+### 4. Error Handling
+
+```php
+try {
+    $result = $userModel->insert('users', $data);
+} catch (Exception $e) {
+    $this->logError($e->getMessage());
+    $this->setFlash('error', 'Operation failed');
+    $this->to('/error');
 }
 ```
 
-Then run: `composer dump-autoload`
+### 5. Testing
 
-In `index.php`:
 ```php
-require_once 'vendor/autoload.php'; // Instead of autoloader.php
-```
-
-#### 2. Environment-Based Configuration
-
-**Create:** `system/Config/Config.php`
-```php
-<?php
-namespace System\Config;
-
-class Config
-{
-    private static $config = [];
-
-    public static function load($file)
-    {
-        $path = __DIR__ . "/../../config/{$file}.php";
-        if (file_exists($path)) {
-            self::$config[$file] = require $path;
-        }
-    }
-
-    public static function get($key, $default = null)
-    {
-        $keys = explode('.', $key);
-        $value = self::$config;
-
-        foreach ($keys as $k) {
-            if (!isset($value[$k])) {
-                return $default;
-            }
-            $value = $value[$k];
-        }
-
-        return $value;
-    }
-}
-```
-
-**Create:** `config/database.php`
-```php
-<?php
-return [
-    'default' => env('DB_CONNECTION', 'mysql'),
-    'connections' => [
-        'mysql' => [
-            'host' => env('DB_HOST', 'localhost'),
-            'database' => env('DB_NAME'),
-            'username' => env('DB_USER'),
-            'password' => env('DB_PASS'),
-            'charset' => env('DB_CHARSET', 'utf8mb4'),
-        ]
-    ]
-];
-```
-
-#### 3. CLI Tool (Spark-like Command Runner)
-
-**Enhance `spark` file:**
-```php
-#!/usr/bin/env php
-<?php
-
-require_once 'autoloader.php';
-
-use System\Core\Env;
-
-Env::load();
-
-// Command registry
-$commands = [
-    'migrate' => 'App\\Commands\\MigrateCommand',
-    'make:controller' => 'App\\Commands\\MakeControllerCommand',
-    'make:model' => 'App\\Commands\\MakeModelCommand',
-    'serve' => 'App\\Commands\\ServeCommand',
-];
-
-$command = $argv[1] ?? 'help';
-
-if ($command === 'help') {
-    echo "Available commands:\n";
-    foreach (array_keys($commands) as $cmd) {
-        echo "  php spark {$cmd}\n";
-    }
-    exit(0);
-}
-
-if (!isset($commands[$command])) {
-    echo "Unknown command: {$command}\n";
-    exit(1);
-}
-
-$commandClass = $commands[$command];
-$commandInstance = new $commandClass();
-$commandInstance->handle(array_slice($argv, 2));
-```
-
-**Example Command:** `app/Commands/MakeControllerCommand.php`
-```php
-<?php
-namespace App\Commands;
-
-class MakeControllerCommand
-{
-    public function handle($args)
-    {
-        $name = $args[0] ?? null;
-
-        if (!$name) {
-            echo "Usage: php spark make:controller ControllerName\n";
-            return;
-        }
-
-        $template = "<?php\nnamespace App\\Controllers;\n\nuse System\\BaseController;\n\nclass {$name} extends BaseController\n{\n    public function index()\n    {\n        // Your code here\n    }\n}\n";
-
-        $filePath = "app/Controllers/{$name}.php";
-        file_put_contents($filePath, $template);
-
-        echo "Controller created: {$filePath}\n";
-    }
-}
+// Test your routes
+// Test middleware logic
+// Test model methods
+// Test controller responses
 ```
 
 ---
 
-## 🎓 Best Practices
+## API Reference
 
-### 1. Controller Best Practices
+### BaseController Methods
 
-✅ Keep controllers thin - business logic in models/services
-✅ Use dependency injection for models
-✅ Return consistent response formats
-✅ Validate input before processing
-✅ Use transactions for multi-step operations
+| Method | Description |
+|--------|-------------|
+| `view($view, $data)` | Load view with data |
+| `to($url)` | Redirect to URL |
+| `model($name, $alias)` | Load model |
+| `getPost($key, $default)` | Get POST data |
+| `getGet($key, $default)` | Get GET data |
+| `getVar($key, $default)` | Get input from any method |
+| `validate($data, $rules)` | Validate data |
+| `respondWithJSON($data, $code)` | JSON response |
+| `setSession($key, $value)` | Set session |
+| `getSession($key, $default)` | Get session |
+| `setFlash($type, $message)` | Set flash message |
+| `uploadFile($field, $ext, $size, $folder)` | Upload file |
+| `sanitizeInput($input, $type)` | Sanitize input |
+| `xssClean($data)` | Clean XSS |
 
-### 2. Model Best Practices
+### BaseModel Methods
 
-✅ Use query builder instead of raw SQL
-✅ Define relationships in separate methods
-✅ Use soft deletes for user data
-✅ Implement caching for frequently accessed data
-✅ Use model events for logging/auditing
+| Method | Description |
+|--------|-------------|
+| `get()` | Get all records |
+| `first()` | Get first record |
+| `find($id)` | Find by ID |
+| `where($conditions)` | Add WHERE clause |
+| `orWhere($conditions)` | Add OR WHERE |
+| `whereIn($field, $values)` | WHERE IN |
+| `like($field, $value)` | LIKE search |
+| `join($table, $condition)` | JOIN tables |
+| `orderBy($field, $direction)` | Order results |
+| `limit($limit, $offset)` | Limit results |
+| `insert($table, $data)` | Insert record |
+| `update($table, $data, $where)` | Update records |
+| `delete($table, $where)` | Delete records |
+| `beginTransaction()` | Start transaction |
+| `commit()` | Commit transaction |
+| `rollBack()` | Rollback transaction |
 
-### 3. Security Best Practices
+### Cache Methods
 
-✅ Never trust user input - always validate and sanitize
-✅ Use CSRF tokens for state-changing requests
-✅ Store passwords with strong hashing (Argon2id)
-✅ Implement rate limiting on authentication endpoints
-✅ Use HTTPS in production
-✅ Keep dependencies updated
-
-### 4. Performance Best Practices
-
-✅ Use database indexes on frequently queried columns
-✅ Cache expensive queries
-✅ Lazy load relationships
-✅ Optimize images and assets
-✅ Enable OPcache in production
-✅ Use CDN for static assets
-
----
-
-## 📚 Additional Resources
-
-### Documentation
-- PHP Official: https://www.php.net/manual/en/
-- PDO Reference: https://www.php.net/manual/en/book.pdo.php
-- PSR Standards: https://www.php-fig.org/psr/
-
-### Similar Frameworks (for inspiration)
-- CodeIgniter 4: https://codeigniter.com/user_guide/
-- Laravel: https://laravel.com/docs
-- Slim Framework: https://www.slimframework.com/
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Please follow these guidelines:
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/AmazingFeature`
-3. Commit changes: `git commit -m 'Add AmazingFeature'`
-4. Push to branch: `git push origin feature/AmazingFeature`
-5. Open a Pull Request
+| Method | Description |
+|--------|-------------|
+| `Cache::get($key, $default)` | Get cached value |
+| `Cache::put($key, $value, $ttl)` | Store in cache |
+| `Cache::remember($key, $ttl, $callback)` | Get or store |
+| `Cache::forget($key)` | Delete cache key |
+| `Cache::flush()` | Clear all cache |
+| `Cache::has($key)` | Check if exists |
 
 ---
 
-## 📝 License
+## Conclusion
 
-This framework is open-source software. Please check the repository for license details.
+CodeIgniter Alternative Framework provides a modern, lightweight, and powerful foundation for building PHP applications. With its intuitive API, robust features, and excellent performance, you can focus on building great applications rather than dealing with framework complexity.
+
+### Resources
+
+- **Documentation**: This guide
+- **Support**: Contact framework author
+- **Version**: 2.0.0
+- **License**: MIT
+
+### Contributing
+
+Feel free to contribute to the framework by:
+- Reporting bugs
+- Suggesting features
+- Submitting pull requests
+- Improving documentation
 
 ---
 
-## 👨‍💻 Author
-
-**Oyatillo (Inforteuz)**
-GitHub: [@Inforteuz](https://github.com/Inforteuz)
-
----
-
-**Built with ❤️ for the PHP community**
+**Happy Coding with CodeIgniter Alternative Framework!** 🚀
