@@ -1,4 +1,38 @@
 <?php
+/**
+ * DebugToolbar Class
+ * 
+ * @package     System\Core
+ * @author      
+ * @license     MIT
+ * @version     2.0.0
+ * 
+ * @description
+ * This class provides a lightweight and customizable debugging toolbar 
+ * for development environments. It helps developers monitor and analyze:
+ * 
+ *  - Script execution time and memory usage
+ *  - Executed database queries and their performance
+ *  - Routing and request handling details
+ *  - System and custom log messages
+ * 
+ * Features:
+ *  - Toggleable UI panel in the browser with multiple debug tabs
+ *  - Query backtrace for identifying the origin of SQL statements
+ *  - LocalStorage integration to preserve UI state between reloads
+ *  - Conditionally enabled via the DEBUG_MODE environment variable
+ * 
+ * Usage:
+ *  DebugToolbar::init();          // Initialize at application start
+ *  DebugToolbar::addQuery(...);   // Log database queries
+ *  DebugToolbar::setRoute(...);   // Log current route information
+ *  DebugToolbar::log(...);        // Add custom/system log messages
+ *  DebugToolbar::render();        // Output the HTML debug toolbar
+ * 
+ * Note:
+ *  The toolbar is only active when DEBUG_MODE is set to 'true'.
+ */
+
 namespace System\Core;
 
 class DebugToolbar
@@ -115,4 +149,5 @@ class DebugToolbar
 }
 
 ?>
+
 
