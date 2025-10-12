@@ -24,19 +24,22 @@ class DebugToolbar
         self::log('Framework initialized', 'system');
     }
     
-    public static function addQuery($sql, $params = [], $time = 0)
+    public static function addQuery($sql, $params = [], $time = 0, $success = true)
     {
         if (!self::$enabled) return;
-
+    
         $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 5);
+        
         self::$queries[] = [
-            'sql' => $sql,
-            'params' => $params,
-            'time' => $time,
+            'sql'       => $sql,
+            'params'    => $params,
+            'time'      => $time,
+            'success'   => $success,
             'backtrace' => $backtrace
         ];
         
-        self::log("Query executed: " . substr($sql, 0, 100) . (strlen($sql) > 100 ? '...' : ''), 'database');
+        $status = $success ? 'SUCCESS' : 'FAILURE';
+        self::log("[$status] Query executed: " . substr($sql, 0, 100) . (strlen($sql) > 100 ? '...' : ''), 'database');
     }
     
     public static function setRoute($method, $uri, $controller, $action, $middlewares = [])
@@ -112,3 +115,4 @@ class DebugToolbar
 }
 
 ?>
+
