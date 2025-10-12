@@ -55,7 +55,7 @@ class Database
         Env::load();
 
         $this->host = Env::get('DB_HOST', 'localhost');
-        $this->dbname = Env::get('DB_NAME', 'test_db');
+        $this->dbname = Env::get('DB_NAME', 'performance_schema');
         $this->username = Env::get('DB_USER', 'root');
         $this->password = Env::get('DB_PASS', '');
         $this->charset = Env::get('DB_CHARSET', 'utf8mb4');
