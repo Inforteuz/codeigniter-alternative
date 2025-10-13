@@ -7,8 +7,8 @@
  *
  * @package    CodeIgniter Alternative
  * @subpackage System
- * @version    2.2.0
- * @date       2025-01-12
+ * @version    2.0.0
+ * @date       2024-12-12
  *
  * @description
  * Enhanced functionality includes:
