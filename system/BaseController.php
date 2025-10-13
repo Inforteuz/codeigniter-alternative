@@ -7,38 +7,26 @@
  *
  * @package    CodeIgniter Alternative
  * @subpackage System
- * @version    2.0.0
- * @date       2025-01-01
+ * @version    2.2.0
+ * @date       2025-01-12
  *
  * @description
  * Enhanced functionality includes:
  *
- * 1. **Request & Response Handling**:
- *    - Enhanced input methods with validation
- *    - Response formatting and status code management
- *    - Header management utilities
- *
- * 2. **Model & Helper Loading**:
- *    - Dynamic model loading and caching
- *    - Helper function loading system
- *
- * 3. **Advanced Validation**:
- *    - Rule-based validation system
- *    - Custom validation rules
- *    - Validation error handling
- *
- * 4. **Cookie & Session Management**:
- *    - Secure cookie handling
- *    - Enhanced session utilities
- *
- * 5. **URL & Routing Helpers**:
- *    - URL generation and manipulation
- *    - Route parameter handling
- *
- * 6. **Security Features**:
- *    - CSRF token management
- *    - XSS protection
- *    - SQL injection prevention
+ * 1. **Request & Response Handling**
+ * 2. **Model & Helper Loading**
+ * 3. **Advanced Validation**
+ * 4. **Cookie & Session Management**
+ * 5. **URL & Routing Helpers**
+ * 6. **Security Features**
+ * 7. **Enhanced View System** (NEW METHODS ADDED)
+ *    - renderPartial() - Layout'siz render
+ *    - insert() - Sodda include
+ *    - asset() - Static fayllar URL
+ *    - csrfField() - CSRF input field
+ *    - old() - Forma qiymatlari
+ *    - showErrorBlock() - Validatsiya xatolari
+ *    - renderComponent() - View komponentlar
  */
 namespace System;
 use System\Core\Env;
@@ -58,6 +46,25 @@ class BaseController
     protected $validationRules = [];
     protected $validationErrors = [];
 
+    // View system properties
+    protected $layout = 'default';
+    protected $useLayout = true;
+    protected $viewData = [];
+    protected $sections = [];
+    protected $currentSection = null;
+    protected $viewRendered = false;
+    
+    // Asset stacks for scripts and styles
+    protected $stacks = [];
+    protected $currentStack = null;
+    
+    // Slot system for components
+    protected $slots = [];
+    protected $currentSlot = null;
+    
+    // Old input data for form repopulation
+    protected $oldInput = [];
+
     public function __construct()
     {
         if (session_status() === PHP_SESSION_NONE) {
@@ -68,6 +75,7 @@ class BaseController
         $this->base_url = $this->getBaseUrl();
         $this->initializeRequest();
         $this->initializeCSRF();
+        $this->loadOldInput();
     }
 
     /**
@@ -95,6 +103,25 @@ class BaseController
         if (!isset($_SESSION['csrf_token'])) {
             $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
         }
+    }
+
+    /**
+     * Load old input data from session
+     */
+    private function loadOldInput()
+    {
+        if (isset($_SESSION['_old_input'])) {
+            $this->oldInput = $_SESSION['_old_input'];
+            unset($_SESSION['_old_input']);
+        }
+    }
+
+    /**
+     * Store current input for next request
+     */
+    protected function flashInput()
+    {
+        $_SESSION['_old_input'] = $_POST;
     }
 
     // ===== REQUEST METHODS =====
@@ -154,22 +181,19 @@ class BaseController
      */
     public function getVar($key, $default = null)
     {
-        // Check POST first
         if (isset($_POST[$key])) {
             return $_POST[$key];
         }
-        
-        // Then GET
+
         if (isset($_GET[$key])) {
             return $_GET[$key];
         }
-        
-        // Then php://input for PUT, PATCH, DELETE
+
         $input = json_decode(file_get_contents('php://input'), true);
         if (is_array($input) && isset($input[$key])) {
             return $input[$key];
         }
-        
+
         return $default;
     }
 
@@ -191,7 +215,7 @@ class BaseController
     public function getClientIpAddress()
     {
         $ipKeys = ['HTTP_CLIENT_IP', 'HTTP_X_FORWARDED_FOR', 'REMOTE_ADDR'];
-        
+
         foreach ($ipKeys as $key) {
             if (!empty($_SERVER[$key])) {
                 $ip = $_SERVER[$key];
@@ -203,7 +227,7 @@ class BaseController
                 }
             }
         }
-        
+
         return $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
     }
 
@@ -217,13 +241,13 @@ class BaseController
     {
         $headers = $this->request['headers'];
         $name = strtolower($name);
-        
+
         foreach ($headers as $key => $value) {
             if (strtolower($key) === $name) {
                 return $value;
             }
         }
-        
+
         return $default;
     }
 
@@ -264,11 +288,11 @@ class BaseController
     {
         $this->setStatusCode($statusCode);
         $this->setHeader('Content-Type', 'application/json');
-        
+
         foreach ($headers as $name => $value) {
             $this->setHeader($name, $value);
         }
-        
+
         echo json_encode($data, JSON_UNESCAPED_UNICODE);
         exit;
     }
@@ -373,17 +397,17 @@ class BaseController
     public function model($modelName, $alias = null)
     {
         $alias = $alias ?: $modelName;
-        
+
         if (isset($this->models[$alias])) {
             return $this->models[$alias];
         }
-        
+
         $modelClass = "\\App\\Models\\{$modelName}";
-        
+
         if (!class_exists($modelClass)) {
             throw new \Exception("Model {$modelName} not found");
         }
-        
+
         $this->models[$alias] = new $modelClass();
         return $this->models[$alias];
     }
@@ -398,15 +422,15 @@ class BaseController
         if (in_array($helperName, $this->helpers)) {
             return true;
         }
-        
+
         $helperFile = __DIR__ . "/../app/Helpers/{$helperName}_helper.php";
-        
+
         if (file_exists($helperFile)) {
             require_once $helperFile;
             $this->helpers[] = $helperName;
             return true;
         }
-        
+
         $this->logError("Helper {$helperName} not found");
         return false;
     }
@@ -434,18 +458,22 @@ class BaseController
     {
         $rules = $rules ?: $this->validationRules;
         $this->validationErrors = [];
-        
+
         foreach ($rules as $field => $rule) {
             $value = $data[$field] ?? null;
             $ruleList = is_string($rule) ? explode('|', $rule) : $rule;
-            
+
             foreach ($ruleList as $singleRule) {
                 if (!$this->validateField($field, $value, $singleRule)) {
-                    break; // Stop on first error for this field
+                    break; 
                 }
             }
         }
-        
+
+        if (!empty($this->validationErrors)) {
+            $this->flashInput();
+        }
+
         return empty($this->validationErrors);
     }
 
@@ -461,7 +489,7 @@ class BaseController
         $parts = explode('[', $rule, 2);
         $ruleName = $parts[0];
         $parameter = isset($parts[1]) ? rtrim($parts[1], ']') : null;
-        
+
         switch ($ruleName) {
             case 'required':
                 if (empty($value)) {
@@ -469,49 +497,49 @@ class BaseController
                     return false;
                 }
                 break;
-                
+
             case 'min_length':
                 if (strlen($value) < (int)$parameter) {
                     $this->validationErrors[$field][] = "The {$field} field must be at least {$parameter} characters.";
                     return false;
                 }
                 break;
-                
+
             case 'max_length':
                 if (strlen($value) > (int)$parameter) {
                     $this->validationErrors[$field][] = "The {$field} field cannot exceed {$parameter} characters.";
                     return false;
                 }
                 break;
-                
+
             case 'valid_email':
                 if (!filter_var($value, FILTER_VALIDATE_EMAIL)) {
                     $this->validationErrors[$field][] = "The {$field} field must contain a valid email address.";
                     return false;
                 }
                 break;
-                
+
             case 'numeric':
                 if (!is_numeric($value)) {
                     $this->validationErrors[$field][] = "The {$field} field must contain only numbers.";
                     return false;
                 }
                 break;
-                
+
             case 'integer':
                 if (!filter_var($value, FILTER_VALIDATE_INT)) {
                     $this->validationErrors[$field][] = "The {$field} field must contain an integer.";
                     return false;
                 }
                 break;
-                
+
             case 'alpha':
                 if (!ctype_alpha($value)) {
                     $this->validationErrors[$field][] = "The {$field} field may only contain alphabetical characters.";
                     return false;
                 }
                 break;
-                
+
             case 'alpha_numeric':
                 if (!ctype_alnum($value)) {
                     $this->validationErrors[$field][] = "The {$field} field may only contain alpha-numeric characters.";
@@ -519,7 +547,7 @@ class BaseController
                 }
                 break;
         }
-        
+
         return true;
     }
 
@@ -619,11 +647,10 @@ class BaseController
         if (is_array($data)) {
             return array_map([$this, 'xssClean'], $data);
         }
-        
-        // Remove potential XSS vectors
+
         $data = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]+/S', '', $data);
         $data = str_replace(['<script', '</script>', 'javascript:', 'onclick=', 'onerror='], '', $data);
-        
+
         return htmlspecialchars($data, ENT_QUOTES, 'UTF-8');
     }
 
@@ -638,11 +665,11 @@ class BaseController
     public function url($segments = '', $params = [])
     {
         $url = $this->base_url($segments);
-        
+
         if (!empty($params)) {
             $url .= '?' . http_build_query($params);
         }
-        
+
         return $url;
     }
 
@@ -688,7 +715,7 @@ class BaseController
     {
         $totalPages = ceil($totalRecords / $perPage);
         $currentPage = max(1, min($currentPage, $totalPages));
-        
+
         $pagination = [
             'total_records' => $totalRecords,
             'per_page' => $perPage,
@@ -701,11 +728,10 @@ class BaseController
             'offset' => ($currentPage - 1) * $perPage,
             'links' => []
         ];
-        
-        // Generate page links
+
         $startPage = max(1, $currentPage - 2);
         $endPage = min($totalPages, $currentPage + 2);
-        
+
         for ($i = $startPage; $i <= $endPage; $i++) {
             $pagination['links'][] = [
                 'page' => $i,
@@ -713,7 +739,7 @@ class BaseController
                 'is_current' => $i === $currentPage
             ];
         }
-        
+
         return $pagination;
     }
 
@@ -749,9 +775,9 @@ class BaseController
         if ($key === null) {
             return $_SESSION;
         }
-        
+
         $value = $_SESSION[$key] ?? $default;
-        
+
         return $decrypt && $value !== $default ? $this->decrypt($value) : $value;
     }
 
@@ -791,7 +817,652 @@ class BaseController
         return base64_decode($data);
     }
 
-    // ===== ORIGINAL METHODS (PRESERVED) =====
+    // ===== VIEW SYSTEM (CI4-INSPIRED) =====
+
+    /**
+     * Main view rendering method
+     * @param string $view View file path (without .php extension)
+     * @param array $data Data to pass to view
+     * @return void
+     */
+    protected function view($view, $data = [])
+    {
+        if ($this->viewRendered) {
+            if ($this->isDebug()) {
+                echo "<!-- VIEW: Rendering already completed, skipping {$view} -->\n";
+            }
+            return;
+        }
+
+        try {
+            $this->sections = [];
+            $this->currentSection = null;
+            $this->viewData = array_merge($this->viewData, $data);
+            extract($this->viewData);
+
+            if ($this->shouldExcludeFromLayout($view)) {
+                $this->useLayout = false;
+            }
+
+            $viewFile = $this->getViewPath($view);
+            if (!file_exists($viewFile)) {
+                throw new \Exception("View file \"{$view}.php\" not found at {$viewFile}");
+            }
+
+            ob_start();
+
+            if ($this->isDebug()) {
+                echo "<!-- VIEW START: {$view} -->\n";
+            }
+
+            require $viewFile;
+
+            if ($this->useLayout && $this->layout) {
+                $output = $this->renderWithLayout($this->layout);
+            } else {
+                $output = $this->sections['content'] ?? '';
+                if ($this->isDebug()) {
+                    $output = "<!-- NO LAYOUT -->\n" . $output;
+                }
+            }
+
+            echo $output;
+
+            if ($this->isDebug()) {
+                echo "<!-- VIEW END: {$view} -->\n";
+            }
+
+            $finalOutput = ob_get_clean();
+            echo $finalOutput;
+            $this->viewRendered = true;
+
+        } catch (\Throwable $e) {
+            $this->handleViewError($e);
+        }
+    }
+
+    /**
+     * Render view without layout (for AJAX, modals, partials)
+     * @param string $view View file path
+     * @param array $data Data to pass to view
+     * @param bool $return Whether to return content instead of echoing
+     * @return string|void
+     */
+    protected function renderPartial($view, $data = [], $return = false)
+    {
+        $originalUseLayout = $this->useLayout;
+        $this->useLayout = false;
+        
+        $partialData = array_merge($this->viewData, $data);
+        extract($partialData);
+
+        $viewFile = $this->getViewPath($view);
+
+        if (!file_exists($viewFile)) {
+            $error = "Partial view \"{$view}.php\" not found";
+            if ($return) {
+                return "<!-- ERROR: {$error} -->";
+            }
+            echo "<!-- ERROR: {$error} -->";
+            return;
+        }
+
+        if ($return) {
+            ob_start();
+        }
+
+        if ($this->isDebug()) {
+            echo "<!-- PARTIAL START: {$view} -->\n";
+        }
+
+        require $viewFile;
+
+        if ($this->isDebug()) {
+            echo "<!-- PARTIAL END: {$view} -->\n";
+        }
+
+        $this->useLayout = $originalUseLayout;
+
+        if ($return) {
+            return ob_get_clean();
+        }
+    }
+
+    /**
+     * Simplified include method (alias for includeView)
+     * @param string $view View path
+     * @param array $data Additional data
+     * @return void
+     */
+    protected function insert($view, $data = [])
+    {
+        $this->includeView($view, $data, false);
+    }
+
+    /**
+     * Generate asset URL for CSS, JS, images
+     * @param string $path Path to asset (relative to public folder)
+     * @param string $type Asset type (css, js, img)
+     * @return string
+     */
+    protected function asset($path, $type = '')
+    {
+        $path = ltrim($path, '/');
+        
+        if ($type) {
+            $typePath = rtrim($type, '/');
+            return $this->base_url("assets/{$typePath}/{$path}");
+        }
+        
+        return $this->base_url("assets/{$path}");
+    }
+
+    /**
+     * Generate CSRF input field for forms
+     * @param bool $return Whether to return HTML instead of echoing
+     * @return string|void
+     */
+    protected function csrfField($return = false)
+    {
+        $token = $this->getCSRFToken();
+        $html = '<input type="hidden" name="csrf_token" value="' . htmlspecialchars($token, ENT_QUOTES, 'UTF-8') . '">';
+        
+        if ($return) {
+            return $html;
+        }
+        
+        echo $html;
+    }
+
+    /**
+     * Get old form input value (for form repopulation)
+     * @param string $key Input name
+     * @param mixed $default Default value
+     * @return mixed
+     */
+    protected function old($key, $default = '')
+    {
+        return $this->oldInput[$key] ?? $default;
+    }
+
+    /**
+     * Display validation error block for a field
+     * @param string $field Field name
+     * @param string $class CSS class for error container
+     * @param bool $return Whether to return HTML instead of echoing
+     * @return string|void
+     */
+    protected function showErrorBlock($field, $class = 'error-message', $return = false)
+    {
+        $errors = $this->getValidationErrors($field);
+        
+        if (empty($errors)) {
+            return $return ? '' : null;
+        }
+
+        $html = '<div class="' . htmlspecialchars($class, ENT_QUOTES, 'UTF-8') . '">';
+        foreach ($errors as $error) {
+            $html .= '<p>' . htmlspecialchars($error, ENT_QUOTES, 'UTF-8') . '</p>';
+        }
+        $html .= '</div>';
+
+        if ($return) {
+            return $html;
+        }
+
+        echo $html;
+    }
+
+    /**
+     * Render small reusable view component
+     * @param string $component Component name (stored in Views/components/)
+     * @param array $data Data to pass to component
+     * @param bool $return Whether to return content
+     * @return string|void
+     */
+    protected function renderComponent($component, $data = [], $return = false)
+    {
+        $component = ltrim($component, '/');
+        if (!preg_match('/^[a-z0-9\/_\-]+$/i', $component)) {
+            $msg = "Invalid component name: {$component}";
+            if ($return) return "<!-- ERROR: {$msg} -->";
+            echo "<!-- ERROR: {$msg} -->";
+            return;
+        }
+
+        $componentFile = realpath(__DIR__ . "/../app/Views/components/{$component}.php");
+        $componentsDir = realpath(__DIR__ . "/../app/Views/components");
+
+        if ($componentFile === false || strpos($componentFile, $componentsDir) !== 0 || !is_file($componentFile)) {
+            $error = "Component \"{$component}.php\" not found";
+            if ($return) {
+                return "<!-- ERROR: {$error} -->";
+            }
+            echo "<!-- ERROR: {$error} -->";
+            return;
+        }
+
+        $componentData = array_merge($this->viewData, $data);
+
+        if ($return) ob_start();
+
+        if ($this->isDebug()) {
+            echo "<!-- COMPONENT START: {$component} -->\n";
+        }
+
+        (function($file, $vars) {
+            extract($vars, EXTR_SKIP);
+            require $file;
+        })($componentFile, $componentData);
+
+        if ($this->isDebug()) {
+            echo "<!-- COMPONENT END: {$component} -->\n";
+        }
+
+        if ($return) {
+            return ob_get_clean();
+        }
+    }
+
+    /**
+     * Start a named stack (for scripts, styles, etc.)
+     * @param string $name Stack name
+     * @return void
+     */
+    protected function push($name)
+    {
+        if ($this->currentStack) {
+            throw new \LogicException("Cannot nest stacks: already in stack '{$this->currentStack}'");
+        }
+
+        $this->currentStack = $name;
+        ob_start();
+    }
+
+    /**
+     * End current stack
+     * @return void
+     */
+    protected function endPush()
+    {
+        if (!$this->currentStack) {
+            throw new \LogicException("No stack started");
+        }
+
+        $content = ob_get_clean();
+        $name = $this->currentStack;
+
+        if (!isset($this->stacks[$name])) {
+            $this->stacks[$name] = '';
+        }
+
+        $this->stacks[$name] .= $content;
+        $this->currentStack = null;
+    }
+
+    /**
+     * Render a stack
+     * @param string $name Stack name
+     * @return string
+     */
+    protected function stack($name)
+    {
+        return $this->stacks[$name] ?? '';
+    }
+
+    /**
+     * Start a slot (for component content injection)
+     * @param string $name Slot name
+     * @return void
+     */
+    protected function slot($name)
+    {
+        if ($this->currentSlot) {
+            throw new \LogicException("Cannot nest slots: already in slot '{$this->currentSlot}'");
+        }
+
+        $this->currentSlot = $name;
+        ob_start();
+    }
+
+    /**
+     * End current slot
+     * @return void
+     */
+    protected function endSlot()
+    {
+        if (!$this->currentSlot) {
+            throw new \LogicException("No slot started");
+        }
+
+        $content = ob_get_clean();
+        $this->slots[$this->currentSlot] = $content;
+        $this->currentSlot = null;
+    }
+
+    /**
+     * Get slot content
+     * @param string $name Slot name
+     * @param string $default Default content
+     * @return string
+     */
+    protected function getSlot($name, $default = '')
+    {
+        return $this->slots[$name] ?? $default;
+    }
+
+    /**
+     * Check if view should be excluded from layout rendering
+     * @param string $view View path
+     * @return bool
+     */
+    protected function shouldExcludeFromLayout($view)
+    {
+        $excludedViews = [
+            'home/index',
+            'welcome_message',
+            'home/home',
+            'welcome'
+        ];
+        
+        return in_array($view, $excludedViews);
+    }
+
+    /**
+     * Get full path to view file
+     * @param string $view
+     * @return string
+     */
+    protected function getViewPath($view)
+    {
+        return __DIR__ . "/../app/Views/{$view}.php";
+    }
+
+    /**
+     * Render view with layout
+     * @param string $layout Layout name
+     * @return string
+     */
+    protected function renderWithLayout($layout)
+    {
+        $layoutFile = $this->getLayoutPath($layout);
+
+        if (!file_exists($layoutFile)) {
+            if ($this->isDebug()) {
+                return "<!-- LAYOUT NOT FOUND: {$layout} -->\n" .
+                       ($this->sections['content'] ?? '');
+            }
+            return $this->sections['content'] ?? '';
+        }
+
+        extract($this->viewData);
+
+        ob_start();
+        if ($this->isDebug()) echo "<!-- LAYOUT START: {$layout} -->\n";
+        require $layoutFile;
+        if ($this->isDebug()) echo "<!-- LAYOUT END: {$layout} -->\n";
+        return ob_get_clean();
+    }
+
+    /**
+     * Get full path to layout file
+     * @param string $layout
+     * @return string
+     */
+    protected function getLayoutPath($layout)
+    {
+        return __DIR__ . "/../app/Views/layouts/{$layout}.php";
+    }
+
+    /**
+     * Set which layout to use
+     * @param string $layout Layout name (without .php)
+     * @return self
+     */
+    protected function setLayout($layout)
+    {
+        $this->layout = $layout;
+        $this->useLayout = true;
+        return $this;
+    }
+
+    /**
+     * Extend a layout (used in view files)
+     * @param string $layout Layout name
+     * @return self
+     */
+    protected function extend($layout)
+    {
+        $this->layout = $layout;
+        $this->useLayout = true;
+        return $this;
+    }
+
+    /**
+     * Disable layout rendering
+     * @return self
+     */
+    protected function noLayout()
+    {
+        $this->useLayout = false;
+        return $this;
+    }
+
+    /**
+     * Start a section (used in view files)
+     * @param string $name Section name
+     * @return void
+     */
+    protected function section($name)
+    {
+        if ($this->currentSection) {
+            throw new \LogicException("Cannot nest sections: already in section '{$this->currentSection}'");
+        }
+
+        $this->currentSection = $name;
+        ob_start();
+        if ($this->isDebug() && $name !== 'title') {
+            echo "<!-- SECTION START: {$name} -->\n";
+        }
+    }
+
+    /**
+     * End current section (used in view files)
+     * @return void
+     */
+    protected function endSection()
+    {
+        if (!$this->currentSection) {
+            throw new \LogicException("No section started");
+        }
+
+        $content = ob_get_clean();
+        if ($this->isDebug() && $this->currentSection !== 'title') {
+            $content .= "<!-- SECTION END: {$this->currentSection} -->\n";
+        }
+
+        $this->sections[$this->currentSection] = $content;
+        $this->currentSection = null;
+    }
+
+    /**
+     * Render a section (used in layout files)
+     * @param string $name Section name
+     * @param bool $escape Whether to escape HTML
+     * @return string
+     */
+    protected function renderSection($name, $escape = false)
+    {
+        $content = $this->sections[$name] ?? '';
+        
+        if ($this->isDebug() && $content === '') {
+            return "<!-- SECTION EMPTY: {$name} -->";
+        }
+        
+        return $escape ? htmlspecialchars($content, ENT_QUOTES, 'UTF-8') : $content;
+    }
+
+    /**
+     * Check if section exists
+     * @param string $name Section name
+     * @return bool
+     */
+    protected function hasSection($name)
+    {
+        return isset($this->sections[$name]);
+    }
+
+    /**
+     * Include a partial view
+     * @param string $view View path
+     * @param array $data Additional data
+     * @param bool $return Whether to return content
+     * @return string|void
+     */
+    protected function includeView($view, $data = [], $return = false)
+    {
+        $partialData = array_merge($this->viewData, $data);
+        extract($partialData);
+
+        $viewFile = $this->getViewPath($view);
+
+        if ($return) ob_start();
+
+        if (is_file($viewFile)) {
+            require $viewFile;
+        } else {
+            if ($this->isDebug()) {
+                echo "<!-- INCLUDE NOT FOUND: {$view} -->\n";
+            }
+        }
+
+        if ($return) {
+            return ob_get_clean();
+        }
+    }
+
+    /**
+     * Set view data
+     * @param string|array $key
+     * @param mixed $value
+     * @return self
+     */
+    protected function setData($key, $value = null)
+    {
+        if (is_array($key)) {
+            $this->viewData = array_merge($this->viewData, $key);
+        } else {
+            $this->viewData[$key] = $value;
+        }
+        return $this;
+    }
+
+    /**
+     * Get view data
+     * @param string|null $key
+     * @param mixed $default
+     * @return mixed
+     */
+    protected function getData($key = null, $default = null)
+    {
+        if ($key === null) {
+            return $this->viewData;
+        }
+        return $this->viewData[$key] ?? $default;
+    }
+
+    /**
+     * Append content to section
+     * @param string $name Section name
+     * @param string $content Content to append
+     * @return void
+     */
+    protected function appendSection($name, $content)
+    {
+        if (isset($this->sections[$name])) {
+            $this->sections[$name] .= $content;
+        } else {
+            $this->sections[$name] = $content;
+        }
+    }
+
+    /**
+     * Prepend content to section
+     * @param string $name Section name
+     * @param string $content Content to prepend
+     * @return void
+     */
+    protected function prependSection($name, $content)
+    {
+        if (isset($this->sections[$name])) {
+            $this->sections[$name] = $content . $this->sections[$name];
+        } else {
+            $this->sections[$name] = $content;
+        }
+    }
+
+    /**
+     * Escape HTML string
+     * @param string $string
+     * @return string
+     */
+    protected function escape($string)
+    {
+        return htmlspecialchars($string, ENT_QUOTES, 'UTF-8');
+    }
+
+    /**
+     * Alias for escape
+     * @param string $string
+     * @return string
+     */
+    protected function esc($string)
+    {
+        return $this->escape($string);
+    }
+
+    /**
+     * Handle view errors
+     * @param \Throwable $e
+     * @return void
+     */
+    protected function handleViewError(\Throwable $e)
+    {
+        $this->logError("View error: " . $e->getMessage() . " in " . $e->getFile() . ":" . $e->getLine());
+
+        if ($this->isDebug()) {
+            $this->showError(500, $e->getMessage());
+        } else {
+            $this->showError(500, 'An error occurred while rendering the view');
+        }
+    }
+
+    /**
+     * Check if debug mode is enabled
+     * @return bool
+     */
+    protected function isDebug()
+    {
+        $debug = \System\Core\Env::get('DEBUG_MODE');
+        return in_array(strtolower((string)$debug), ['1', 'true', 'on'], true);
+    }
+
+    /**
+     * Alias for view() with settings support
+     * @param string $viewPath
+     * @param array $data
+     * @return void
+     */
+    protected function renderView($viewPath, $data = [])
+    {
+        if (property_exists($this, 'settings') && is_array($this->settings)) {
+            $data['settings'] = $this->settings;
+        }
+
+        $this->view($viewPath, $data);
+    }
+
+    // ===== ORIGINAL METHODS =====
 
     public function to($url)
     {
@@ -906,46 +1577,6 @@ class BaseController
             'fileSize' => $file['size'],
             'folder' => $folder
         ];
-    }
-
-   protected function view($view, $data = [])
-    {
-        try {
-            extract($data);
-            $viewFile = "app/Views/{$view}.php";
-            if (!file_exists($viewFile)) {
-                throw new \Exception("View file \"{$view}.php\" not found.");
-            }
-
-            ob_start();
-            require_once $viewFile;
-            $output = ob_get_clean();
-
-            if (\System\Core\Env::get('DEBUG_MODE') === 'true') {
-                $toolbar = \System\Core\DebugToolbar::render();
-
-                if (stripos($output, '</body>') !== false) {
-                    $output = str_ireplace('</body>', $toolbar . '</body>', $output);
-                } else {
-                    $output .= $toolbar;
-                }
-            }
-
-            echo $output;
-
-        } catch (\Exception $e) {
-            $this->logError($e->getMessage());
-            $this->showError(500, $e->getMessage());
-        }
-    }
-
-    protected function renderView(string $viewPath, array $data = []): void
-    {
-        if (property_exists($this, 'settings') && is_array($this->settings)) {
-            $data['settings'] = $this->settings;
-        }
-
-        $this->view($viewPath, $data);
     }
 
     private function showError($code, $message)
@@ -1065,7 +1696,7 @@ class BaseController
         $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 1)[0] ?? [];
         $file = $backtrace['file'] ?? 'unknown';
         $line = $backtrace['line'] ?? 'unknown';
-    
+
         echo "<div style='
             background:#1e1e1e;
             color:#dcdcdc;
@@ -1077,23 +1708,23 @@ class BaseController
             border-radius:6px;
             line-height:1.5;
         '>";
-        
+
         echo "<div style='color:#9cdcfe;margin-bottom:8px;'>
                 <strong>Debug dump:</strong> <small>{$file}:{$line}</small>
               </div>";
         echo "<pre style='white-space:pre-wrap;margin:0;color:#ce9178;'>";
         print_r($data);
         echo "</pre>";
-    
+
         echo "</div>";
-    
+
         if (method_exists($this, 'logDebug')) {
             $this->logDebug("DD at {$file}:{$line}\n" . print_r($data, true));
         }
-    
+
         if ($stop) exit;
     }
-    
+
     public function show404()
     {
         header("HTTP/1.1 404 Not Found");
