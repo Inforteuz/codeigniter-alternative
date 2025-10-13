@@ -7,38 +7,26 @@
  *
  * @package    CodeIgniter Alternative
  * @subpackage System
- * @version    2.0.0
- * @date       2025-01-01
+ * @version    2.5.0
+ * @date       2025-01-12
  *
  * @description
  * Enhanced functionality includes:
  *
- * 1. **Advanced Query Builder**:
- *    - SELECT with specific fields, DISTINCT, aggregate functions
- *    - JOIN operations (INNER, LEFT, RIGHT)
- *    - GROUP BY and HAVING clauses
- *    - Complex WHERE conditions with OR support
- *    - LIKE, IN, BETWEEN operations
- *
- * 2. **Batch Operations**:
- *    - insertBatch() for multiple row insertions
- *    - updateBatch() for bulk updates
- *    - Batch delete operations
- *
- * 3. **Advanced Model Features**:
- *    - Soft delete support
- *    - Model events/callbacks
- *    - Automatic timestamps
- *    - Data validation
- *    - Relationship handling
- *
- * 4. **Search & Filter**:
- *    - Global search across multiple fields
- *    - Advanced filtering with multiple criteria
- *    - Full-text search support
+ * 1. **Advanced Query Builder**
+ * 2. **Batch Operations**
+ * 3. **Advanced Model Features**
+ * 4. **Search & Filter**
+ * 5. **NEW: Relationship Management** (hasOne, hasMany, belongsTo, belongsToMany)
+ * 6. **NEW: Advanced Pagination**
+ * 7. **NEW: Model Scopes**
+ * 8. **NEW: Data Casting & Mutators**
+ * 9. **NEW: Chunk Processing**
+ * 10. **NEW: Upsert & Replace Operations**
  */
 namespace System;
 use System\Database\Database;
+use System\Core\DebugToolbar;
 
 class BaseModel
 {
@@ -71,6 +59,25 @@ class BaseModel
         'beforeFind' => [],
         'afterFind' => []
     ];
+    
+    // Data casting
+    protected $casts = [];
+    
+    // Hidden fields (not returned in results)
+    protected $hidden = [];
+    
+    // Appended fields (computed properties)
+    protected $appends = [];
+    
+    // Fillable fields (mass assignment protection)
+    protected $fillable = [];
+    protected $guarded = ['*'];
+    
+    // Relationships cache
+    protected $relationships = [];
+    
+    // Query scopes
+    protected $scopes = [];
     
     // Query result cache
     protected $resultArray = [];
@@ -307,7 +314,43 @@ class BaseModel
     }
 
     /**
-     * Add WHERE LIKE condition
+     * Add WHERE NULL condition
+     * @param string $field
+     * @return self
+     */
+    public function whereNull($field)
+    {
+        $condition = "{$field} IS NULL";
+        
+        if (!empty($this->lastWhere)) {
+            $this->lastWhere .= " AND " . $condition;
+        } else {
+            $this->lastWhere = "WHERE " . $condition;
+        }
+        
+        return $this;
+    }
+
+    /**
+     * Add WHERE NOT NULL condition
+     * @param string $field
+     * @return self
+     */
+    public function whereNotNull($field)
+    {
+        $condition = "{$field} IS NOT NULL";
+        
+        if (!empty($this->lastWhere)) {
+            $this->lastWhere .= " AND " . $condition;
+        } else {
+            $this->lastWhere = "WHERE " . $condition;
+        }
+        
+        return $this;
+    }
+
+    /**
+     * WHERE LIKE condition
      * @param string $field
      * @param string $value
      * @param string $position (before, after, both)
@@ -485,6 +528,28 @@ class BaseModel
     }
 
     /**
+     * Order by latest (descending by created_at or specified field)
+     * @param string|null $field
+     * @return self
+     */
+    public function latest($field = null)
+    {
+        $field = $field ?: $this->createdField;
+        return $this->orderBy($field, 'DESC');
+    }
+
+    /**
+     * Order by oldest (ascending by created_at or specified field)
+     * @param string|null $field
+     * @return self
+     */
+    public function oldest($field = null)
+    {
+        $field = $field ?: $this->createdField;
+        return $this->orderBy($field, 'ASC');
+    }
+
+    /**
      * Limit for query builder
      * @param int $limit
      * @param int $offset
@@ -499,6 +564,26 @@ class BaseModel
         return $this;
     }
 
+    /**
+     * Take (alias for limit)
+     * @param int $count
+     * @return self
+     */
+    public function take($count)
+    {
+        return $this->limit($count);
+    }
+
+    /**
+     * Skip (set offset)
+     * @param int $count
+     * @return self
+     */
+    public function skip($count)
+    {
+        return $this->limit(PHP_INT_MAX, $count);
+    }
+
     // ===== QUERY EXECUTION METHODS =====
 
     /**
@@ -510,7 +595,12 @@ class BaseModel
         $sql = $this->buildSelectQuery() . " LIMIT 1";
         $result = $this->query($sql, $this->lastParams);
         $this->resetQueryBuilder();
-        return $result[0] ?? null;
+        
+        if (!empty($result)) {
+            return $this->processResult($result[0]);
+        }
+        
+        return null;
     }
 
     /**
@@ -521,7 +611,7 @@ class BaseModel
     {
         $sql = $this->buildSelectQuery();
         
-        if (DebugToolbar::isEnabled()) {
+        if (class_exists('System\Core\DebugToolbar') && DebugToolbar::isEnabled()) {
             $builderInfo = [
                 'select' => $this->lastSelect,
                 'where' => $this->lastWhere,
@@ -533,7 +623,8 @@ class BaseModel
         
         $result = $this->query($sql, $this->lastParams);
         $this->resetQueryBuilder();
-        return $result;
+        
+        return array_map([$this, 'processResult'], $result);
     }
 
     /**
@@ -557,6 +648,118 @@ class BaseModel
     public function findAll($ids)
     {
         return $this->whereIn($this->primaryKey, $ids)->get();
+    }
+
+    /**
+     * Find or fail (throws exception if not found)
+     * @param mixed $id
+     * @return array
+     * @throws \Exception
+     */
+    public function findOrFail($id)
+    {
+        $result = $this->find($id);
+        
+        if ($result === null) {
+            throw new \Exception("Record with ID {$id} not found in table {$this->table}");
+        }
+        
+        return $result;
+    }
+
+    /**
+     * First or fail
+     * @return array
+     * @throws \Exception
+     */
+    public function firstOrFail()
+    {
+        $result = $this->first();
+        
+        if ($result === null) {
+            throw new \Exception("No records found in table {$this->table}");
+        }
+        
+        return $result;
+    }
+
+    /**
+     * Get single value from a column
+     * @param string $column
+     * @return mixed
+     */
+    public function value($column)
+    {
+        $result = $this->select($column)->first();
+        return $result[$column] ?? null;
+    }
+
+    /**
+     * Get array of values from a column
+     * @param string $column
+     * @param string|null $key
+     * @return array
+     */
+    public function pluck($column, $key = null)
+    {
+        $results = $this->get();
+        
+        if ($key === null) {
+            return array_column($results, $column);
+        }
+        
+        $plucked = [];
+        foreach ($results as $row) {
+            $plucked[$row[$key]] = $row[$column];
+        }
+        
+        return $plucked;
+    }
+
+    // ===== CHUNK PROCESSING =====
+
+    /**
+     * Process records in chunks
+     * @param int $size Chunk size
+     * @param callable $callback Callback function
+     * @return bool
+     */
+    public function chunk($size, $callback)
+    {
+        $page = 1;
+        
+        do {
+            $results = $this->limit($size, ($page - 1) * $size)->get();
+            
+            if (empty($results)) {
+                break;
+            }
+            
+            if ($callback($results, $page) === false) {
+                return false;
+            }
+            
+            $page++;
+            
+        } while (count($results) === $size);
+        
+        return true;
+    }
+
+    /**
+     * Process each record individually
+     * @param callable $callback
+     * @return bool
+     */
+    public function each($callback)
+    {
+        return $this->chunk(100, function($records) use ($callback) {
+            foreach ($records as $record) {
+                if ($callback($record) === false) {
+                    return false;
+                }
+            }
+        });
     }
 
     // ===== BATCH OPERATIONS =====
@@ -651,6 +854,54 @@ class BaseModel
         return $updateCount > 0 ? $updateCount : false;
     }
 
+    // ===== UPSERT & REPLACE =====
+
+    /**
+     * Insert or update record (upsert)
+     * @param array $data Data to insert/update
+     * @param array $uniqueFields Fields to check for existence
+     * @return bool|string
+     */
+    public function upsert($data, $uniqueFields = [])
+    {
+        if (empty($uniqueFields)) {
+            $uniqueFields = [$this->primaryKey];
+        }
+
+        $conditions = [];
+        foreach ($uniqueFields as $field) {
+            if (isset($data[$field])) {
+                $conditions[$field] = $data[$field];
+            }
+        }
+
+        $existing = $this->where($conditions)->first();
+
+        if ($existing) {
+            return $this->update($this->table, $data, $conditions);
+        } else {
+            return $this->insert($this->table, $data);
+        }
+    }
+
+    /**
+     * Update or insert (first match found will be updated)
+     * @param array $conditions
+     * @param array $data
+     * @return bool|string
+     */
+    public function updateOrInsert($conditions, $data)
+    {
+        $existing = $this->where($conditions)->first();
+
+        if ($existing) {
+            return $this->update($this->table, $data, $conditions);
+        } else {
+            $insertData = array_merge($conditions, $data);
+            return $this->insert($this->table, $insertData);
+        }
+    }
+
     // ===== SOFT DELETES =====
 
     /**
@@ -706,8 +957,6 @@ class BaseModel
      */
     public function withDeleted()
     {
-        // This method allows including soft-deleted records
-        // Implementation depends on your query building logic
         return $this;
     }
 
@@ -718,9 +967,23 @@ class BaseModel
     public function onlyDeleted()
     {
         if ($this->useSoftDeletes) {
-            $this->where([$this->deletedField . ' IS NOT' => null]);
+            $this->whereNotNull($this->deletedField);
         }
         return $this;
+    }
+
+    /**
+     * Force delete (permanent delete even with soft deletes)
+     * @param mixed $id
+     * @return bool
+     */
+    public function forceDelete($id)
+    {
+        $conditions = is_array($id) 
+            ? [$this->primaryKey . ' IN' => $id]
+            : [$this->primaryKey => $id];
+            
+        return $this->delete($this->table, $conditions);
     }
 
     // ===== SEARCH & FILTER METHODS =====
@@ -738,8 +1001,10 @@ class BaseModel
         }
 
         $conditions = [];
+        $escapedTerm = addslashes($term);
+        
         foreach ($fields as $field) {
-            $conditions[] = "{$field} LIKE '%{$term}%'";
+            $conditions[] = "{$field} LIKE '%{$escapedTerm}%'";
         }
 
         $searchCondition = '(' . implode(' OR ', $conditions) . ')';
@@ -770,6 +1035,369 @@ class BaseModel
             }
         }
         return $this;
+    }
+
+    // ===== MODEL SCOPES =====
+
+    /**
+     * Apply a scope to the query
+     * @param string $scope Scope name
+     * @param mixed ...$args Additional arguments
+     * @return self
+     */
+    public function scope($scope, ...$args)
+    {
+        $method = 'scope' . ucfirst($scope);
+        
+        if (method_exists($this, $method)) {
+            return $this->$method(...$args);
+        }
+        
+        return $this;
+    }
+
+    // ===== RELATIONSHIPS =====
+
+    /**
+     * Define hasOne relationship
+     * @param string $related Related model class
+     * @param string|null $foreignKey Foreign key in related table
+     * @param string|null $localKey Local key in this table
+     * @return array|null
+     */
+    protected function hasOne($related, $foreignKey = null, $localKey = null)
+    {
+        $localKey = $localKey ?: $this->primaryKey;
+        $foreignKey = $foreignKey ?: strtolower($this->table) . '_id';
+        
+        $relatedModel = new $related();
+        $localValue = $this->getData($localKey);
+        
+        if ($localValue === null) {
+            return null;
+        }
+        
+        return $relatedModel->where([$foreignKey => $localValue])->first();
+    }
+
+    /**
+     * Define hasMany relationship
+     * @param string $related Related model class
+     * @param string|null $foreignKey Foreign key in related table
+     * @param string|null $localKey Local key in this table
+     * @return array
+     */
+    protected function hasMany($related, $foreignKey = null, $localKey = null)
+    {
+        $localKey = $localKey ?: $this->primaryKey;
+        $foreignKey = $foreignKey ?: strtolower($this->table) . '_id';
+        
+        $relatedModel = new $related();
+        $localValue = $this->getData($localKey);
+        
+        if ($localValue === null) {
+            return [];
+        }
+        
+        return $relatedModel->where([$foreignKey => $localValue])->get();
+    }
+
+    /**
+     * Define belongsTo relationship
+     * @param string $related Related model class
+     * @param string|null $foreignKey Foreign key in this table
+     * @param string|null $ownerKey Primary key in related table
+     * @return array|null
+     */
+    protected function belongsTo($related, $foreignKey = null, $ownerKey = null)
+    {
+        $relatedModel = new $related();
+        $ownerKey = $ownerKey ?: $relatedModel->primaryKey;
+        $foreignKey = $foreignKey ?: strtolower($relatedModel->table) . '_id';
+        
+        $foreignValue = $this->getData($foreignKey);
+        
+        if ($foreignValue === null) {
+            return null;
+        }
+        
+        return $relatedModel->where([$ownerKey => $foreignValue])->first();
+    }
+
+    /**
+     * Simple belongsToMany relationship
+     * @param string $related Related model class
+     * @param string $pivotTable Pivot table name
+     * @param string|null $foreignPivotKey Foreign key for this model in pivot
+     * @param string|null $relatedPivotKey Foreign key for related model in pivot
+     * @return array
+     */
+    protected function belongsToMany($related, $pivotTable, $foreignPivotKey = null, $relatedPivotKey = null)
+    {
+        $relatedModel = new $related();
+        $foreignPivotKey = $foreignPivotKey ?: strtolower($this->table) . '_id';
+        $relatedPivotKey = $relatedPivotKey ?: strtolower($relatedModel->table) . '_id';
+        
+        $localValue = $this->getData($this->primaryKey);
+        
+        if ($localValue === null) {
+            return [];
+        }
+        
+        return $relatedModel
+            ->join($pivotTable, "{$pivotTable}.{$relatedPivotKey} = {$relatedModel->table}.{$relatedModel->primaryKey}")
+            ->where(["{$pivotTable}.{$foreignPivotKey}" => $localValue])
+            ->get();
+    }
+
+    // ===== ADVANCED PAGINATION =====
+
+    /**
+     * Enhanced pagination with metadata
+     * @param int $perPage Items per page
+     * @param int $page Current page
+     * @return array
+     */
+    public function paginateAdvanced($perPage = 15, $page = 1)
+    {
+        $page = max(1, $page);
+        $offset = ($page - 1) * $perPage;
+        
+        $countSql = $this->buildSelectQuery();
+        $countSql = preg_replace('/SELECT .* FROM/', 'SELECT COUNT(*) as total FROM', $countSql, 1);
+        $countSql = preg_replace('/ORDER BY .*/', '', $countSql);
+        $countSql = preg_replace('/LIMIT .*/', '', $countSql);
+        
+        $countResult = $this->query($countSql, $this->lastParams);
+        $total = $countResult[0]['total'] ?? 0;
+        
+        $results = $this->limit($perPage, $offset)->get();
+        
+        $lastPage = ceil($total / $perPage);
+        
+        return [
+            'data' => $results,
+            'pagination' => [
+                'total' => (int)$total,
+                'per_page' => $perPage,
+                'current_page' => $page,
+                'last_page' => $lastPage,
+                'from' => $offset + 1,
+                'to' => min($offset + $perPage, $total),
+                'has_more_pages' => $page < $lastPage,
+                'has_previous_page' => $page > 1,
+                'next_page' => $page < $lastPage ? $page + 1 : null,
+                'previous_page' => $page > 1 ? $page - 1 : null
+            ]
+        ];
+    }
+
+    // ===== DATA PROCESSING =====
+
+    /**
+     * Process single result (apply casts, hide fields, append attributes)
+     * @param array $data
+     * @return array
+     */
+    protected function processResult($data)
+    {
+        if (empty($data)) {
+            return $data;
+        }
+
+        foreach ($this->casts as $key => $type) {
+            if (array_key_exists($key, $data)) {
+                $data[$key] = $this->castAttribute($key, $data[$key], $type);
+            }
+        }
+
+        foreach ($this->hidden as $field) {
+            unset($data[$field]);
+        }
+
+        foreach ($this->appends as $attribute) {
+            $method = 'get' . str_replace('_', '', ucwords($attribute, '_')) . 'Attribute';
+            if (method_exists($this, $method)) {
+                $data[$attribute] = $this->$method($data);
+            }
+        }
+
+        return $data;
+    }
+
+    /**
+     * Cast attribute to specified type
+     * @param string $key
+     * @param mixed $value
+     * @param string $type
+     * @return mixed
+     */
+    protected function castAttribute($key, $value, $type)
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        switch ($type) {
+            case 'int':
+            case 'integer':
+                return (int)$value;
+            
+            case 'real':
+            case 'float':
+            case 'double':
+                return (float)$value;
+            
+            case 'string':
+                return (string)$value;
+            
+            case 'bool':
+            case 'boolean':
+                return (bool)$value;
+            
+            case 'array':
+            case 'json':
+                return is_string($value) ? json_decode($value, true) : $value;
+            
+            case 'object':
+                return is_string($value) ? json_decode($value) : $value;
+            
+            case 'date':
+            case 'datetime':
+                return $value;
+            
+            default:
+                return $value;
+        }
+    }
+
+    /**
+     * Get data attribute (for use in accessors)
+     * @param string $key
+     * @return mixed
+     */
+    protected function getData($key)
+    {
+        return $this->resultArray[$key] ?? null;
+    }
+
+    // ===== MASS ASSIGNMENT PROTECTION =====
+
+    /**
+     * Fill model with data (respecting fillable/guarded)
+     * @param array $data
+     * @return array
+     */
+    protected function fill($data)
+    {
+        if (!empty($this->fillable)) {
+            return array_intersect_key($data, array_flip($this->fillable));
+        }
+
+        if ($this->guarded === ['*']) {
+            return [];
+        }
+
+        return array_diff_key($data, array_flip($this->guarded));
+    }
+
+    /**
+     * Create new record (mass assignment protected)
+     * @param array $data
+     * @return bool|string
+     */
+    public function create($data)
+    {
+        $fillableData = $this->fill($data);
+        return $this->insert($this->table, $fillableData);
+    }
+
+    // ===== AGGREGATE METHODS =====
+
+    /**
+     * Get count of records
+     * @param string $column
+     * @return int
+     */
+    public function countRecords($column = '*')
+    {
+        return (int)$this->selectCount($column)->value('count');
+    }
+
+    /**
+     * Get maximum value
+     * @param string $column
+     * @return mixed
+     */
+    public function max($column)
+    {
+        return $this->selectMax($column)->value($column . '_max');
+    }
+
+    /**
+     * Get minimum value
+     * @param string $column
+     * @return mixed
+     */
+    public function min($column)
+    {
+        return $this->selectMin($column)->value($column . '_min');
+    }
+
+    /**
+     * Get average value
+     * @param string $column
+     * @return mixed
+     */
+    public function avg($column)
+    {
+        return $this->selectAvg($column)->value($column . '_avg');
+    }
+
+    /**
+     * Get sum of values
+     * @param string $column
+     * @return mixed
+     */
+    public function sum($column)
+    {
+        return $this->selectSum($column)->value($column . '_sum');
+    }
+
+    /**
+     * NEW: Increment a column value
+     * @param string $column
+     * @param int $amount
+     * @param array $extra Additional fields to update
+     * @return bool
+     */
+    public function increment($column, $amount = 1, $extra = [])
+    {
+        $data = array_merge($extra, [$column => new \PDOStatement("({$column} + {$amount})")]);
+        
+        $sql = "UPDATE {$this->table} SET {$column} = {$column} + {$amount}";
+        
+        if (!empty($extra)) {
+            foreach ($extra as $key => $value) {
+                $sql .= ", {$key} = :{$key}";
+            }
+        }
+        
+        $sql .= " " . $this->lastWhere;
+        
+        return $this->executeQuery($sql, array_merge($this->lastParams, $extra));
+    }
+
+    /**
+     * Decrement a column value
+     * @param string $column
+     * @param int $amount
+     * @param array $extra
+     * @return bool
+     */
+    public function decrement($column, $amount = 1, $extra = [])
+    {
+        return $this->increment($column, -$amount, $extra);
     }
 
     // ===== MODEL EVENTS & CALLBACKS =====
@@ -861,7 +1489,6 @@ class BaseModel
             $conditionOperator = '=';
             $field = $key;
             
-            // Parse operators from key
             if (strpos($key, '!=') !== false) {
                 $parts = explode('!=', $key);
                 $field = trim($parts[0]);
@@ -1004,7 +1631,7 @@ class BaseModel
         }
     }
 
-    // ===== ORIGINAL METHODS (PRESERVED) =====
+    // ===== ORIGINAL METHODS =====
 
     protected function logError($message, $sql = null)
     {
@@ -1269,7 +1896,6 @@ class BaseModel
         $data = [
             "id" => 1,
             "user_id" => "USER-67485ced924fb",
-            // ...
         ];
         $this->insert("users", $data);
     } 
