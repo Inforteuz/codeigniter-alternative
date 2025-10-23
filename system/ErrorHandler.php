@@ -198,7 +198,7 @@ class ErrorHandler
             $logMessage .= "Stack trace:\n{$error['trace']}\n";
         }
         
-        $logMessage .= "==========================================\n";
+        $logMessage .= "================================================\n";
         
         file_put_contents($logFile, $logMessage, FILE_APPEND | LOCK_EX);
     }
