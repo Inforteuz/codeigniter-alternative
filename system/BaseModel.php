@@ -7,8 +7,8 @@
  *
  * @package    CodeIgniter Alternative
  * @subpackage System
- * @version    2.0.0
- * @date       2024-12-12
+ * @version    2.5.0
+ * @date       2025-01-12
  *
  * @description
  * Enhanced functionality includes:
@@ -27,6 +27,7 @@
 namespace System;
 use System\Database\Database;
 use System\Core\DebugToolbar;
+use System\Validation;
 
 class BaseModel
 {
@@ -41,6 +42,11 @@ class BaseModel
     protected $lastJoin = '';
     protected $lastGroupBy = '';
     protected $lastHaving = '';
+    
+    // <CHANGE> Added validation properties
+    protected $validation;
+    protected $validationErrors = [];
+    protected $validationMessages = [];
     
     // Enhanced features
     protected $useSoftDeletes = false;
@@ -88,6 +94,57 @@ class BaseModel
     public function __construct()
     {
         $this->db = Database::getInstance();
+        // <CHANGE> Initialize validation system
+        $this->validation = new \System\Validation();
+    }
+
+    // ===== VALIDATION METHODS =====
+
+    /**
+     * Validate data against rules
+     * @param array $data
+     * @return bool
+     */
+    public function validate(array $data)
+    {
+        if (empty($this->validationRules)) {
+            return true;
+        }
+
+        if (!$this->validation->setRules($this->validationRules, $this->validationMessages)->validate($data)) {
+            $this->validationErrors = $this->validation->getErrors();
+            return false;
+        }
+
+        $this->validationErrors = [];
+        return true;
+    }
+
+    /**
+     * Get validation errors
+     * @return array
+     */
+    public function getErrors()
+    {
+        return $this->validationErrors;
+    }
+
+    // ===== MODEL MUTATORS =====
+
+    /**
+     * Apply mutators to data before insert/update
+     * @param array $data
+     * @return array
+     */
+    protected function applyMutators(array $data)
+    {
+        foreach ($data as $key => $value) {
+            $method = 'set' . str_replace('_', '', ucwords($key, '_')) . 'Attribute';
+            if (method_exists($this, $method)) {
+                $data[$key] = $this->$method($value);
+            }
+        }
+        return $data;
     }
 
     // ===== QUERY BUILDER - SELECT METHODS =====
@@ -1281,6 +1338,16 @@ class BaseModel
         return $this->resultArray[$key] ?? null;
     }
 
+    /**
+     * Returns the database table name associated with the model.
+     *
+     * @return string The table name.
+     */
+    public function getTable()
+    {
+        return $this->table;
+    }
+
     // ===== MASS ASSIGNMENT PROTECTION =====
 
     /**
@@ -1416,20 +1483,29 @@ class BaseModel
     }
 
     /**
-     * Trigger callback
-     * @param string $event
-     * @param mixed $data
-     * @return void
+     * Trigger registered callbacks for a given event.
+     *
+     * @param string $event The event name (e.g. 'beforeInsert', 'afterInsert').
+     * @param mixed $data   Optional data passed to the callback.
+     * @return mixed        The (possibly modified) data after callbacks.
      */
-    protected function triggerCallback($event, &$data = null)
+    protected function triggerCallback($event, $data = null)
     {
-        if (isset($this->callbacks[$event])) {
-            foreach ($this->callbacks[$event] as $callback) {
-                if (is_callable($callback)) {
-                    call_user_func_array($callback, [&$data]);
+        if (!isset($this->callbacks[$event])) {
+            return $data;
+        }
+
+        foreach ($this->callbacks[$event] as $callback) {
+            if (is_callable($callback)) {
+                $result = call_user_func($callback, $data);
+
+                if ($result !== null) {
+                    $data = $result;
                 }
             }
         }
+
+        return $data;
     }
 
     // ===== HELPER METHODS =====
@@ -1549,6 +1625,8 @@ class BaseModel
      */
     public function insert($table, $data)
     {
+        $data = $this->applyMutators($data);
+        
         $this->triggerCallback('beforeInsert', $data);
         
         if ($this->useTimestamps) {
@@ -1577,6 +1655,20 @@ class BaseModel
     }
 
     /**
+     * Inserts a new record into the model's table.
+     * 
+     * This is a convenience wrapper around the base insert() method,
+     * automatically using the model's assigned $table property.
+     *
+     * @param array $data The data to insert into the table.
+     * @return bool|string Returns the inserted record ID on success, or false on failure.
+     */
+    public function insertModel(array $data)
+    {
+        return $this->insert($this->table, $data);
+    }
+
+    /**
      * Enhanced update with callbacks and timestamps
      * @param string $table
      * @param array $data
@@ -1585,6 +1677,8 @@ class BaseModel
      */
     public function update($table, $data, $conditions)
     {
+        $data = $this->applyMutators($data);
+        
         $this->triggerCallback('beforeUpdate', $data);
         
         if ($this->useTimestamps) {
