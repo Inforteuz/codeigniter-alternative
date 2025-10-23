@@ -17,8 +17,8 @@ use System\Core\Session;
  *
  * @package    System\Core
  * @version    2.1.0
- * @author     
- * @since      2025-10-21
+ * @author     Inforte
+ * @since      2024-10-10
  */
 class Auth
 {
