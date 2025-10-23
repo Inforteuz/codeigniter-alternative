@@ -7,8 +7,8 @@
  *
  * @package    CodeIgniter Alternative
  * @subpackage System
- * @version    2.0.0
- * @date       2024-12-12
+ * @version    2.2.0
+ * @date       2025-01-12
  *
  * @description
  * Enhanced functionality includes:
@@ -19,14 +19,14 @@
  * 4. **Cookie & Session Management**
  * 5. **URL & Routing Helpers**
  * 6. **Security Features**
- * 7. **Enhanced View System** (NEW METHODS ADDED)
- *    - renderPartial() - Layout'siz render
- *    - insert() - Sodda include
- *    - asset() - Static fayllar URL
+ * 7. **Enhanced View System**
+ *    - renderPartial() - Render without layout
+ *    - insert() - Simple include
+ *    - asset() - Static files URL
  *    - csrfField() - CSRF input field
- *    - old() - Forma qiymatlari
- *    - showErrorBlock() - Validatsiya xatolari
- *    - renderComponent() - View komponentlar
+ *    - old() - Form values
+ *    - showErrorBlock() - Validation errors
+ *    - renderComponent() - View components
  */
 namespace System;
 use System\Core\Env;
@@ -43,7 +43,6 @@ class BaseController
     protected $models = [];
     protected $helpers = [];
     protected $request = [];
-    protected $validationRules = [];
     protected $validationErrors = [];
 
     // View system properties
@@ -65,17 +64,19 @@ class BaseController
     // Old input data for form repopulation
     protected $oldInput = [];
 
+    protected $viewComposers = [];
+
     public function __construct()
     {
-        if (session_status() === PHP_SESSION_NONE) {
-            session_start();
-        }
         Env::load();
+
+        $this->initializeSession();
         $this->db = Database::getInstance();
         $this->base_url = $this->getBaseUrl();
         $this->initializeRequest();
         $this->initializeCSRF();
         $this->loadOldInput();
+        $this->registerViewComposers();
     }
 
     /**
@@ -93,6 +94,48 @@ class BaseController
             'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? '',
             'ip_address' => $this->getClientIpAddress()
         ];
+    }
+
+    /**
+    * Starts a session with custom settings.
+    * Saves files to the writable/session folder.
+    */
+    private function initializeSession()
+    {
+        $sessionPath = __DIR__ . '/../writable/session';
+
+        if (!is_dir($sessionPath)) {
+            if (!mkdir($sessionPath, 0777, true) && !is_dir($sessionPath)) {
+                $this->logError('Session: Failed to create session save path: ' . $sessionPath);
+                if (session_status() === PHP_SESSION_NONE) {
+                    session_start();
+                }
+                return;
+            }
+        }
+
+        session_save_path($sessionPath);
+        $cookieName = Env::get('SESSION_NAME', 'ci4_session');
+        $cookieLifetime = (int)Env::get('SESSION_LIFETIME', 7200);
+        $cookiePath = Env::get('SESSION_PATH', '/');
+        $cookieDomain = Env::get('SESSION_DOMAIN', '');
+        $cookieSecure = (bool)Env::get('SESSION_SECURE', isset($_SERVER['HTTPS']));
+        $cookieHttpOnly = (bool)Env::get('SESSION_HTTPONLY', true);
+        $cookieSameSite = Env::get('SESSION_SAMESITE', 'Lax');
+
+        session_name($cookieName);
+        session_set_cookie_params([
+            'lifetime' => $cookieLifetime,
+            'path' => $cookiePath,
+            'domain' => $cookieDomain,
+            'secure' => $cookieSecure,
+            'httponly' => $cookieHttpOnly,
+            'samesite' => $cookieSameSite
+        ]);
+
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
     }
 
     /**
@@ -122,6 +165,26 @@ class BaseController
     protected function flashInput()
     {
         $_SESSION['_old_input'] = $_POST;
+    }
+
+    /**
+    * Sets a flash message with a redirect.
+    *
+    * @param string|array $key Message key or key-value array
+    * @param mixed $message Message text if $key is a string
+    * @return self
+    */
+    public function with($key, $message = null)
+    {
+        if (is_array($key)) {
+            foreach ($key as $k => $v) {
+                $this->setFlashMessage($k, $v);
+            }
+        } else {
+            $this->setFlashMessage($key, $message);
+        }
+        
+        return $this;
     }
 
     // ===== REQUEST METHODS =====
@@ -333,6 +396,36 @@ class BaseController
             'message' => $message
         ], 400);
     }
+    
+    /**
+    * @param string $filePath Full path to the file on the server
+    * @param string|null $clientName The name of the file that will be visible to the user
+    * @return never
+    */
+    public function respondWithDownload($filePath, $clientName = null)
+    {
+        if (!file_exists($filePath) || !is_readable($filePath)) {
+            $this->logError("Download error: File not found or not readable at {$filePath}");
+            return $this->showError(404, 'File not found');
+        }
+
+        $fileName = $clientName ?? basename($filePath);
+
+        if (ob_get_level()) {
+            ob_end_clean();
+        }
+
+        $this->setHeader('Content-Type', 'application/octet-stream');
+        $this->setHeader('Content-Disposition', 'attachment; filename="' . rawurlencode($fileName) . '"');
+        $this->setHeader('Content-Transfer-Encoding', 'binary');
+        $this->setHeader('Content-Length', filesize($filePath));
+        $this->setHeader('Expires', '0');
+        $this->setHeader('Cache-Control', 'must-revalidate, post-check=0, pre-check=0');
+        $this->setHeader('Pragma', 'public');
+
+        readfile($filePath);
+        exit;
+    }
 
     /**
      * Send unauthorized response (401)
@@ -438,120 +531,6 @@ class BaseController
     // ===== VALIDATION METHODS =====
 
     /**
-     * Set validation rules
-     * @param array $rules
-     * @return self
-     */
-    public function setValidationRules($rules)
-    {
-        $this->validationRules = $rules;
-        return $this;
-    }
-
-    /**
-     * Validate data against rules
-     * @param array $data
-     * @param array|null $rules
-     * @return bool
-     */
-    public function validate($data, $rules = null)
-    {
-        $rules = $rules ?: $this->validationRules;
-        $this->validationErrors = [];
-
-        foreach ($rules as $field => $rule) {
-            $value = $data[$field] ?? null;
-            $ruleList = is_string($rule) ? explode('|', $rule) : $rule;
-
-            foreach ($ruleList as $singleRule) {
-                if (!$this->validateField($field, $value, $singleRule)) {
-                    break; 
-                }
-            }
-        }
-
-        if (!empty($this->validationErrors)) {
-            $this->flashInput();
-        }
-
-        return empty($this->validationErrors);
-    }
-
-    /**
-     * Validate single field
-     * @param string $field
-     * @param mixed $value
-     * @param string $rule
-     * @return bool
-     */
-    private function validateField($field, $value, $rule)
-    {
-        $parts = explode('[', $rule, 2);
-        $ruleName = $parts[0];
-        $parameter = isset($parts[1]) ? rtrim($parts[1], ']') : null;
-
-        switch ($ruleName) {
-            case 'required':
-                if (empty($value)) {
-                    $this->validationErrors[$field][] = "The {$field} field is required.";
-                    return false;
-                }
-                break;
-
-            case 'min_length':
-                if (strlen($value) < (int)$parameter) {
-                    $this->validationErrors[$field][] = "The {$field} field must be at least {$parameter} characters.";
-                    return false;
-                }
-                break;
-
-            case 'max_length':
-                if (strlen($value) > (int)$parameter) {
-                    $this->validationErrors[$field][] = "The {$field} field cannot exceed {$parameter} characters.";
-                    return false;
-                }
-                break;
-
-            case 'valid_email':
-                if (!filter_var($value, FILTER_VALIDATE_EMAIL)) {
-                    $this->validationErrors[$field][] = "The {$field} field must contain a valid email address.";
-                    return false;
-                }
-                break;
-
-            case 'numeric':
-                if (!is_numeric($value)) {
-                    $this->validationErrors[$field][] = "The {$field} field must contain only numbers.";
-                    return false;
-                }
-                break;
-
-            case 'integer':
-                if (!filter_var($value, FILTER_VALIDATE_INT)) {
-                    $this->validationErrors[$field][] = "The {$field} field must contain an integer.";
-                    return false;
-                }
-                break;
-
-            case 'alpha':
-                if (!ctype_alpha($value)) {
-                    $this->validationErrors[$field][] = "The {$field} field may only contain alphabetical characters.";
-                    return false;
-                }
-                break;
-
-            case 'alpha_numeric':
-                if (!ctype_alnum($value)) {
-                    $this->validationErrors[$field][] = "The {$field} field may only contain alpha-numeric characters.";
-                    return false;
-                }
-                break;
-        }
-
-        return true;
-    }
-
-    /**
      * Get validation errors
      * @param string|null $field
      * @return array
@@ -562,6 +541,23 @@ class BaseController
             return $this->validationErrors[$field] ?? [];
         }
         return $this->validationErrors;
+    }
+
+    /**
+     * Validate data using BaseModel validation
+     * @param \System\BaseModel $model
+     * @param array $data
+     * @return bool
+     */
+    public function validateWithModel(\System\BaseModel $model, array $data)
+    {
+        if (!$model->validate($data)) {
+            $this->validationErrors = $model->getErrors();
+            $this->flashInput();
+            return false;
+        }
+        $this->validationErrors = [];
+        return true;
     }
 
     // ===== COOKIE METHODS =====
@@ -820,7 +816,50 @@ class BaseController
     // ===== VIEW SYSTEM (CI4-INSPIRED) =====
 
     /**
-     * Main view rendering method
+     * Register view composers
+     */
+    protected function registerViewComposers()
+    {
+    
+       $this->viewComposers['layouts/default'] = '\App\Composers\GlobalComposer@composeLayout';
+    // $this->viewComposers['partials/header'] = '\App\Composers\GlobalComposer@composeHeader';
+    // $this->viewComposers['admin/dashboard'] = '\App\Composers\GlobalComposer@composeDashboard';
+
+    }
+
+    /**
+     * Run view composers for a specific view
+     */
+    protected function runViewComposers($view)
+    {
+        $composersToRun = [];
+        if (isset($this->viewComposers['*'])) {
+            $composersToRun[] = $this->viewComposers['*'];
+        }
+        if ($this->layout && isset($this->viewComposers[$this->layout])) {
+            $composersToRun[] = $this->viewComposers[$this->layout];
+        }
+        if (isset($this->viewComposers[$view])) {
+            $composersToRun[] = $this->viewComposers[$view];
+        }
+
+        foreach (array_unique($composersToRun) as $composer) {
+            if (is_callable($composer)) {
+                $composer($this);
+            } elseif (is_string($composer) && strpos($composer, '@') !== false) {
+                list($class, $method) = explode('@', $composer);
+                if (class_exists($class)) { 
+                    $composerInstance = new $class();
+                    if (method_exists($composerInstance, $method)) {
+                        $composerInstance->$method($this);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Main view rendering method with caching and composers
      * @param string $view View file path (without .php extension)
      * @param array $data Data to pass to view
      * @return void
@@ -828,17 +867,36 @@ class BaseController
     protected function view($view, $data = [])
     {
         if ($this->viewRendered) {
-            if ($this->isDebug()) {
-                echo "<!-- VIEW: Rendering already completed, skipping {$view} -->\n";
+            return;
+        }
+
+        $hasFlash = false;
+        if (isset($_SESSION)) {
+            foreach ($_SESSION as $key => $value) {
+                if (stripos($key, 'flash') !== false && !empty($value)) {
+                    $hasFlash = true;
+                    break;
+                }
             }
+        }
+
+        $cacheKey = 'view_' . md5($view . serialize($data));
+        $cachedView = null;
+        if (!$this->isDebug() && !$hasFlash) {
+            $cachedView = $this->cache($cacheKey, null, 1);
+        }
+
+        if ($cachedView !== null) {
+            echo $cachedView;
+            $this->viewRendered = true;
             return;
         }
 
         try {
+            $this->runViewComposers($view);
             $this->sections = [];
             $this->currentSection = null;
             $this->viewData = array_merge($this->viewData, $data);
-            extract($this->viewData);
 
             if ($this->shouldExcludeFromLayout($view)) {
                 $this->useLayout = false;
@@ -849,31 +907,39 @@ class BaseController
                 throw new \Exception("View file \"{$view}.php\" not found at {$viewFile}");
             }
 
-            ob_start();
-
             if ($this->isDebug()) {
-                echo "<!-- VIEW START: {$view} -->\n";
+                echo "\n<!-- DEBUG-VIEW-START\n";
+                echo "     File: app/Views/{$view}.php\n";
+                echo "     Loaded at: " . date('Y-m-d H:i:s') . "\n";
+                echo "     Layout: " . ($this->useLayout && $this->layout ? $this->layout : 'none') . "\n";
+                echo "-->\n";
             }
 
+            ob_start();
+            extract($this->viewData, EXTR_SKIP);
             require $viewFile;
+            $rogueContent = ob_get_clean();
 
             if ($this->useLayout && $this->layout) {
+                if (!isset($this->sections['content'])) {
+                    $this->sections['content'] = $rogueContent;
+                }
                 $output = $this->renderWithLayout($this->layout);
             } else {
-                $output = $this->sections['content'] ?? '';
-                if ($this->isDebug()) {
-                    $output = "<!-- NO LAYOUT -->\n" . $output;
-                }
+                $output = $rogueContent;
+            }
+
+            if ($this->isDebug()) {
+                $output .= "\n<!-- DEBUG-VIEW-END: app/Views/{$view}.php -->\n";
+            }
+
+            if (!$this->isDebug() && !$hasFlash) {
+                $this->cache($cacheKey, $output, 3600);
+            } else {
+                $this->cache($cacheKey, null, 0);
             }
 
             echo $output;
-
-            if ($this->isDebug()) {
-                echo "<!-- VIEW END: {$view} -->\n";
-            }
-
-            $finalOutput = ob_get_clean();
-            echo $finalOutput;
             $this->viewRendered = true;
 
         } catch (\Throwable $e) {
@@ -912,13 +978,13 @@ class BaseController
         }
 
         if ($this->isDebug()) {
-            echo "<!-- PARTIAL START: {$view} -->\n";
+            echo "\n<!-- DEBUG-PARTIAL-START: app/Views/{$view}.php -->\n";
         }
 
         require $viewFile;
 
         if ($this->isDebug()) {
-            echo "<!-- PARTIAL END: {$view} -->\n";
+            echo "\n<!-- DEBUG-PARTIAL-END: app/Views/{$view}.php -->\n";
         }
 
         $this->useLayout = $originalUseLayout;
@@ -1047,7 +1113,11 @@ class BaseController
         if ($return) ob_start();
 
         if ($this->isDebug()) {
-            echo "<!-- COMPONENT START: {$component} -->\n";
+            echo "\n<!-- DEBUG-COMPONENT-START\n";
+            echo "     Name: {$component}\n";
+            echo "     File: app/Views/components/{$component}.php\n";
+            echo "     Props: " . (!empty($data) ? implode(', ', array_keys($data)) : 'none') . "\n";
+            echo "-->\n";
         }
 
         (function($file, $vars) {
@@ -1056,7 +1126,7 @@ class BaseController
         })($componentFile, $componentData);
 
         if ($this->isDebug()) {
-            echo "<!-- COMPONENT END: {$component} -->\n";
+            echo "\n<!-- DEBUG-COMPONENT-END: {$component} -->\n";
         }
 
         if ($return) {
@@ -1107,7 +1177,13 @@ class BaseController
      */
     protected function stack($name)
     {
-        return $this->stacks[$name] ?? '';
+        $content = $this->stacks[$name] ?? '';
+        
+        if ($this->isDebug() && !empty($content)) {
+            return "\n<!-- DEBUG-STACK: {$name} -->\n" . $content;
+        }
+        
+        return $content;
     }
 
     /**
@@ -1188,30 +1264,50 @@ class BaseController
         $layoutFile = $this->getLayoutPath($layout);
 
         if (!file_exists($layoutFile)) {
-            if ($this->isDebug()) {
-                return "<!-- LAYOUT NOT FOUND: {$layout} -->\n" .
-                       ($this->sections['content'] ?? '');
-            }
             return $this->sections['content'] ?? '';
         }
 
-        extract($this->viewData);
+        $this->runViewComposers($layout);
+
+        extract($this->viewData, EXTR_SKIP);
 
         ob_start();
-        if ($this->isDebug()) echo "<!-- LAYOUT START: {$layout} -->\n";
+        
+        if ($this->isDebug()) {
+            echo "\n<!-- DEBUG-LAYOUT-START\n";
+            echo "     File: app/Views/{$layout}.php\n";
+            echo "     Sections: " . (!empty($this->sections) ? implode(', ', array_keys($this->sections)) : 'none') . "\n";
+            echo "-->\n";
+        }
+        
         require $layoutFile;
-        if ($this->isDebug()) echo "<!-- LAYOUT END: {$layout} -->\n";
-        return ob_get_clean();
+        
+        $output = ob_get_clean();
+        
+        if ($this->isDebug()) {
+            $output .= "\n<!-- DEBUG-LAYOUT-END: app/Views/{$layout}.php -->\n";
+        }
+        
+        return $output;
     }
 
+
     /**
-     * Get full path to layout file
-     * @param string $layout
+     * Get full path to layout file (CI4-style)
+     * @param string $layout Layout name (e.g. 'layouts/default' or 'default')
      * @return string
      */
     protected function getLayoutPath($layout)
     {
-        return __DIR__ . "/../app/Views/layouts/{$layout}.php";
+
+        $layout = preg_replace('/\.php$/', '', $layout);
+        $layoutPath = __DIR__ . "/../app/Views/{$layout}.php";
+
+        if (!file_exists($layoutPath)) {
+            $layoutPath = __DIR__ . "/../app/Views/layouts/{$layout}.php";
+        }
+
+        return $layoutPath;
     }
 
     /**
@@ -1261,8 +1357,10 @@ class BaseController
 
         $this->currentSection = $name;
         ob_start();
-        if ($this->isDebug() && $name !== 'title') {
-            echo "<!-- SECTION START: {$name} -->\n";
+        $skipDebugComment = in_array($name, ['title', 'meta', 'page_title']);
+        
+        if ($this->isDebug() && !$skipDebugComment) {
+            echo "\n<!-- DEBUG-SECTION-START: {$name} -->\n";
         }
     }
 
@@ -1277,8 +1375,11 @@ class BaseController
         }
 
         $content = ob_get_clean();
-        if ($this->isDebug() && $this->currentSection !== 'title') {
-            $content .= "<!-- SECTION END: {$this->currentSection} -->\n";
+        
+        $skipDebugComment = in_array($this->currentSection, ['title', 'meta', 'page_title']);
+        
+        if ($this->isDebug() && !$skipDebugComment) {
+            $content .= "\n<!-- DEBUG-SECTION-END: {$this->currentSection} -->\n";
         }
 
         $this->sections[$this->currentSection] = $content;
@@ -1295,8 +1396,17 @@ class BaseController
     {
         $content = $this->sections[$name] ?? '';
         
-        if ($this->isDebug() && $content === '') {
-            return "<!-- SECTION EMPTY: {$name} -->";
+        $skipDebugComment = in_array($name, ['title', 'meta', 'page_title']);
+        
+        if ($this->isDebug() && !$skipDebugComment) {
+            if ($content === '') {
+                return "\n<!-- DEBUG-SECTION-RENDER: {$name} (EMPTY) -->\n";
+            }
+            
+            $prefix = "\n<!-- DEBUG-SECTION-RENDER-START: {$name} -->\n";
+            $suffix = "\n<!-- DEBUG-SECTION-RENDER-END: {$name} -->\n";
+            
+            return $prefix . ($escape ? htmlspecialchars($content, ENT_QUOTES, 'UTF-8') : $content) . $suffix;
         }
         
         return $escape ? htmlspecialchars($content, ENT_QUOTES, 'UTF-8') : $content;
@@ -1329,10 +1439,18 @@ class BaseController
         if ($return) ob_start();
 
         if (is_file($viewFile)) {
+            if ($this->isDebug()) {
+                echo "\n<!-- DEBUG-INCLUDE-START: app/Views/{$view}.php -->\n";
+            }
+            
             require $viewFile;
+            
+            if ($this->isDebug()) {
+                echo "\n<!-- DEBUG-INCLUDE-END: app/Views/{$view}.php -->\n";
+            }
         } else {
             if ($this->isDebug()) {
-                echo "<!-- INCLUDE NOT FOUND: {$view} -->\n";
+                echo "\n<!-- DEBUG-INCLUDE-NOT-FOUND: app/Views/{$view}.php -->\n";
             }
         }
 
@@ -1347,7 +1465,7 @@ class BaseController
      * @param mixed $value
      * @return self
      */
-    protected function setData($key, $value = null)
+    public function setData($key, $value = null)
     {
         if (is_array($key)) {
             $this->viewData = array_merge($this->viewData, $key);
@@ -1363,7 +1481,7 @@ class BaseController
      * @param mixed $default
      * @return mixed
      */
-    protected function getData($key = null, $default = null)
+    public function getData($key = null, $default = null)
     {
         if ($key === null) {
             return $this->viewData;
@@ -1466,7 +1584,10 @@ class BaseController
 
     public function to($url)
     {
-        header("Location: $url");
+        if (strpos($url, 'http://') !== 0 && strpos($url, 'https://') !== 0) {
+            $url = $this->base_url($url);
+        }
+        header("Location: " . $url);
         exit();
     }
 
