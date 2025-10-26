@@ -1584,12 +1584,10 @@ class BaseController
             return $buffer;
         }
 
-        // Oddiy HTML izohlarini olib tashlash (lekin /', '', $buffer);
-
         $search = [
-            '/\>[^\S ]+/s',     // Teglardan keyingi keraksiz bo'shliqlarni olib tashlash
-            '/[^\S ]+\</s',     // Teglardan oldingi keraksiz bo'shliqlarni olib tashlash
-            '/(\s)+/s',         // Ko'p bo'shliqlarni bittaga qisqartirish
+            '/\>[^\S ]+/s',
+            '/[^\S ]+\</s',
+            '/(\s)+/s',
         ];
 
         $replace = [
@@ -1599,8 +1597,6 @@ class BaseController
         ];
 
         $buffer = preg_replace($search, $replace, $buffer);
-
-        // Barcha yangi qatorlar va tabulyatsiyalarni olib tashlash
         $buffer = str_replace(["\r\n", "\r", "\n", "\t"], '', $buffer);
 
         return trim($buffer);
