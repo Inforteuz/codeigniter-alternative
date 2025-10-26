@@ -901,7 +901,7 @@ $router->group(['AuthMiddleware'], function($router) {
             </div>
             
             <div style="text-align: center; margin-top: 40px;">
-                <a href="https://inforte.uz/codeigniter-alternative/" target="_blank" class="btn btn-primary" style="padding: 16px 40px; font-size: 1.1rem;">
+                <a href="https://inforte.uz/codeigniter-alternative/Instructions.pdf" target="_blank" class="btn btn-primary" style="padding: 16px 40px; font-size: 1.1rem;">
                     <i class="fas fa-external-link-alt"></i> View full documentation
                 </a>
             </div>
@@ -909,7 +909,7 @@ $router->group(['AuthMiddleware'], function($router) {
 
         <footer>
             <div class="footer-links">
-                <a href="https://inforte.uz/codeigniter-alternative/" target="_blank">
+                <a href="https://inforte.uz/codeigniter-alternative/Instructions.pdf" target="_blank">
                     <i class="fas fa-book"></i> Documentation
                 </a>
                 <a href="https://github.com/Inforteuz/codeigniter-alternative" target="_blank">
