@@ -908,11 +908,7 @@ class BaseController
             }
 
             if ($this->isDebug()) {
-                echo "\n<!-- DEBUG-VIEW-START\n";
-                echo "     File: app/Views/{$view}.php\n";
-                echo "     Loaded at: " . date('Y-m-d H:i:s') . "\n";
-                echo "     Layout: " . ($this->useLayout && $this->layout ? $this->layout : 'none') . "\n";
-                echo "-->\n";
+                echo "\n\n";
             }
 
             ob_start();
@@ -930,7 +926,11 @@ class BaseController
             }
 
             if ($this->isDebug()) {
-                $output .= "\n<!-- DEBUG-VIEW-END: app/Views/{$view}.php -->\n";
+                $output .= "\n\n";
+            }
+
+            if (!$this->isDebug()) {
+                $output = $this->minifyHtml($output);
             }
 
             if (!$this->isDebug() && !$hasFlash) {
@@ -966,32 +966,40 @@ class BaseController
 
         if (!file_exists($viewFile)) {
             $error = "Partial view \"{$view}.php\" not found";
+            $output = "";
+            
             if ($return) {
-                return "<!-- ERROR: {$error} -->";
+                return $output;
             }
-            echo "<!-- ERROR: {$error} -->";
+            echo $output;
             return;
         }
 
-        if ($return) {
-            ob_start();
-        }
+        ob_start();
 
         if ($this->isDebug()) {
-            echo "\n<!-- DEBUG-PARTIAL-START: app/Views/{$view}.php -->\n";
+            echo "\n\n";
         }
 
         require $viewFile;
 
         if ($this->isDebug()) {
-            echo "\n<!-- DEBUG-PARTIAL-END: app/Views/{$view}.php -->\n";
+            echo "\n\n";
         }
 
         $this->useLayout = $originalUseLayout;
 
-        if ($return) {
-            return ob_get_clean();
+        $output = ob_get_clean();
+
+        if (!$this->isDebug()) {
+            $output = $this->minifyHtml($output);
         }
+
+        if ($return) {
+            return $output;
+        }
+        
+        echo $output; 
     }
 
     /**
@@ -1563,6 +1571,39 @@ class BaseController
     {
         $debug = \System\Core\Env::get('DEBUG_MODE');
         return in_array(strtolower((string)$debug), ['1', 'true', 'on'], true);
+    }
+
+    /**
+     * Minify HTML output to a single line.
+     * @param string $buffer The HTML content
+     * @return string Minified HTML
+     */
+    protected function minifyHtml($buffer)
+    {
+        if (trim($buffer) === "") {
+            return $buffer;
+        }
+
+        // Oddiy HTML izohlarini olib tashlash (lekin /', '', $buffer);
+
+        $search = [
+            '/\>[^\S ]+/s',     // Teglardan keyingi keraksiz bo'shliqlarni olib tashlash
+            '/[^\S ]+\</s',     // Teglardan oldingi keraksiz bo'shliqlarni olib tashlash
+            '/(\s)+/s',         // Ko'p bo'shliqlarni bittaga qisqartirish
+        ];
+
+        $replace = [
+            '>',
+            '<',
+            '\\1',
+        ];
+
+        $buffer = preg_replace($search, $replace, $buffer);
+
+        // Barcha yangi qatorlar va tabulyatsiyalarni olib tashlash
+        $buffer = str_replace(["\r\n", "\r", "\n", "\t"], '', $buffer);
+
+        return trim($buffer);
     }
 
     /**
