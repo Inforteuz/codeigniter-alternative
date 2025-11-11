@@ -1551,57 +1551,37 @@ class BaseModel
      */
     protected function buildWhereClause($conditions, $operator = 'AND')
     {
-        if (empty($conditions)) {
+        if (!is_array($conditions) || empty($conditions)) {
             return ['sql' => '', 'params' => []];
         }
 
         $whereParts = [];
         $params = [];
-        $paramCounter = count($this->lastParams);
+        $paramCounter = isset($this->lastParams) && is_array($this->lastParams)
+            ? count($this->lastParams)
+            : 0;
 
         foreach ($conditions as $key => $value) {
             $paramCounter++;
-            
-            $conditionOperator = '=';
+
             $field = $key;
-            
-            if (strpos($key, '!=') !== false) {
-                $parts = explode('!=', $key);
-                $field = trim($parts[0]);
-                $conditionOperator = '!=';
-            } elseif (strpos($key, '>=') !== false) {
-                $parts = explode('>=', $key);
-                $field = trim($parts[0]);
-                $conditionOperator = '>=';
-            } elseif (strpos($key, '<=') !== false) {
-                $parts = explode('<=', $key);
-                $field = trim($parts[0]);
-                $conditionOperator = '<=';
-            } elseif (strpos($key, '>') !== false) {
-                $parts = explode('>', $key);
-                $field = trim($parts[0]);
-                $conditionOperator = '>';
-            } elseif (strpos($key, '<') !== false) {
-                $parts = explode('<', $key);
-                $field = trim($parts[0]);
-                $conditionOperator = '<';
-            } elseif (strpos($key, '<>') !== false) {
-                $parts = explode('<>', $key);
-                $field = trim($parts[0]);
-                $conditionOperator = '<>';
-            } elseif (strpos($key, ' IS NOT') !== false) {
-                $field = str_replace(' IS NOT', '', $key);
-                $conditionOperator = 'IS NOT';
-            } elseif (strpos($key, ' IS') !== false) {
-                $field = str_replace(' IS', '', $key);
-                $conditionOperator = 'IS';
+            $conditionOperator = '=';
+
+            $operators = ['!=', '>=', '<=', '<>', '>', '<', ' IS NOT', ' IS'];
+            foreach ($operators as $op) {
+                if (strpos($key, $op) !== false) {
+                    $parts = explode($op, $key);
+                    $field = trim($parts[0]);
+                    $conditionOperator = trim($op);
+                    break;
+                }
             }
-            
+
             $cleanField = preg_replace('/[^a-zA-Z0-9_]/', '_', $field);
             $cleanOperator = preg_replace('/[^a-zA-Z0-9_]/', '_', $conditionOperator);
-            $paramName = $cleanField . '_' . $cleanOperator . '_' . $paramCounter;
-            
-            if ($conditionOperator === 'IS' || $conditionOperator === 'IS NOT') {
+            $paramName = "{$cleanField}_{$cleanOperator}_{$paramCounter}";
+
+            if (in_array($conditionOperator, ['IS', 'IS NOT'], true)) {
                 $whereParts[] = "{$field} {$conditionOperator} " . ($value === null ? 'NULL' : $value);
             } else {
                 $whereParts[] = "{$field} {$conditionOperator} :{$paramName}";
@@ -1609,8 +1589,10 @@ class BaseModel
             }
         }
 
+        $sql = 'WHERE ' . implode(" {$operator} ", $whereParts);
+
         return [
-            'sql' => "WHERE " . implode(" {$operator} ", $whereParts),
+            'sql' => $sql,
             'params' => $params
         ];
     }
