@@ -869,7 +869,6 @@ class BaseController
         if ($this->viewRendered) {
             return;
         }
-
         $hasFlash = false;
         if (isset($_SESSION)) {
             foreach ($_SESSION as $key => $value) {
@@ -879,43 +878,37 @@ class BaseController
                 }
             }
         }
-
         $cacheKey = 'view_' . md5($view . serialize($data));
         $cachedView = null;
-        if (!$this->isDebug() && !$hasFlash) {
+        
+        if ($this->isViewCachingEnabled() && !$this->isDebug() && !$hasFlash) {
             $cachedView = $this->cache($cacheKey, null, 1);
         }
-
+        
         if ($cachedView !== null) {
             echo $cachedView;
             $this->viewRendered = true;
             return;
         }
-
         try {
             $this->runViewComposers($view);
             $this->sections = [];
             $this->currentSection = null;
             $this->viewData = array_merge($this->viewData, $data);
-
             if ($this->shouldExcludeFromLayout($view)) {
                 $this->useLayout = false;
             }
-
             $viewFile = $this->getViewPath($view);
             if (!file_exists($viewFile)) {
                 throw new \Exception("View file \"{$view}.php\" not found at {$viewFile}");
             }
-
             if ($this->isDebug()) {
                 echo "\n\n";
             }
-
             ob_start();
             extract($this->viewData, EXTR_SKIP);
             require $viewFile;
             $rogueContent = ob_get_clean();
-
             if ($this->useLayout && $this->layout) {
                 if (!isset($this->sections['content'])) {
                     $this->sections['content'] = $rogueContent;
@@ -924,24 +917,22 @@ class BaseController
             } else {
                 $output = $rogueContent;
             }
-
             if ($this->isDebug()) {
                 $output .= "\n\n";
             }
 
-            if (!$this->isDebug()) {
+            if ($this->isHtmlMinifyEnabled() && !$this->isDebug()) {
                 $output = $this->minifyHtml($output);
             }
 
-            if (!$this->isDebug() && !$hasFlash) {
+            if ($this->isViewCachingEnabled() && !$this->isDebug() && !$hasFlash) {
                 $this->cache($cacheKey, $output, 3600);
             } else {
                 $this->cache($cacheKey, null, 0);
             }
-
+            
             echo $output;
             $this->viewRendered = true;
-
         } catch (\Throwable $e) {
             $this->handleViewError($e);
         }
@@ -1578,10 +1569,20 @@ class BaseController
      * @param string $buffer The HTML content
      * @return string Minified HTML
      */
+    
     protected function minifyHtml($buffer)
     {
-        if (trim($buffer) === "") {
+        if (trim($buffer) === '') {
             return $buffer;
+        }
+
+        preg_match_all('#<(script|style|pre|textarea)\b[^>]*>.*?</\1>#is', $buffer, $matches);
+
+        $placeholders = [];
+        foreach ($matches[0] as $i => $match) {
+            $placeholder = "@@HTMLMINIFIER_PLACEHOLDER_{$i}@@";
+            $placeholders[$placeholder] = $match;
+            $buffer = str_replace($match, $placeholder, $buffer);
         }
 
         $search = [
@@ -1589,7 +1590,6 @@ class BaseController
             '/[^\S ]+\</s',
             '/(\s)+/s',
         ];
-
         $replace = [
             '>',
             '<',
@@ -1598,8 +1598,13 @@ class BaseController
 
         $buffer = preg_replace($search, $replace, $buffer);
         $buffer = str_replace(["\r\n", "\r", "\n", "\t"], '', $buffer);
+        $buffer = trim($buffer);
 
-        return trim($buffer);
+        foreach ($placeholders as $placeholder => $original) {
+            $buffer = str_replace($placeholder, $original, $buffer);
+        }
+
+        return $buffer;
     }
 
     /**
@@ -2037,6 +2042,16 @@ class BaseController
     {
         return !empty($_SERVER['HTTP_X_REQUESTED_WITH']) &&
                strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+    }
+
+    protected function isViewCachingEnabled()
+    {
+        return filter_var(Env::get('VIEW_CACHING', 'false'), FILTER_VALIDATE_BOOLEAN);
+    }
+
+    protected function isHtmlMinifyEnabled()
+    {
+        return filter_var(Env::get('MINIFY_HTML', 'false'), FILTER_VALIDATE_BOOLEAN);
     }
 
     protected function validateRequired($fields, $data)
