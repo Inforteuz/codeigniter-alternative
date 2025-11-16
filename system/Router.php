@@ -28,6 +28,7 @@ class Router
      */
     protected $routes = [];
     protected $middlewares = [];
+    protected $prefix = '';
 
     /**
      * Router constructor - Load routes from app/Routes/Routes.php
@@ -35,7 +36,6 @@ class Router
     public function __construct()
     {
         Env::load();
-
         $this->loadAppRoutes();
     }
 
@@ -44,7 +44,7 @@ class Router
      *
      * @throws \Exception if the routes file does not exist
      */
-        protected function loadAppRoutes()
+    protected function loadAppRoutes()
     {
         $routesFile = dirname(__DIR__) . '/app/Routes/Routes.php';
 
@@ -65,27 +65,39 @@ class Router
      */
     public function addRoute($method, $pattern, $controller, $action, $middlewares = [])
     {
-        $this->routes[$method][$pattern] = [
+        $fullPattern = $this->prefix ? trim($this->prefix, '/') . '/' . trim($pattern, '/') : $pattern;
+        $fullPattern = trim($fullPattern, '/');
+
+        $this->routes[$method][$fullPattern] = [
             'controller' => $controller,
             'method' => $action,
             'middlewares' => $middlewares
         ];
 
-        DebugToolbar::log("Route registered: {$method} {$pattern} -> {$controller}::{$action}", 'router');
+        DebugToolbar::log("Route registered: {$method} {$fullPattern} -> {$controller}::{$action}", 'router');
     }
 
     /**
-     * Add multiple routes with same middleware
+     * Add multiple routes with same middleware and optional prefix
      */
-    public function group($middlewares, $callback)
+    public function group($options, $callback)
     {
         $previousMiddlewares = $this->middlewares;
-        
-        $this->middlewares = array_merge($this->middlewares, $middlewares);
-        
+        $previousPrefix = $this->prefix;
+
+        if (isset($options['middleware'])) {
+            $this->middlewares = array_merge($this->middlewares, (array)$options['middleware']);
+        }
+
+        if (isset($options['prefix']) && is_string($options['prefix'])) {
+            $this->prefix = trim($previousPrefix, '/') . '/' . trim($options['prefix'], '/');
+            $this->prefix = trim($this->prefix, '/');
+        }
+
         call_user_func($callback, $this);
-        
+
         $this->middlewares = $previousMiddlewares;
+        $this->prefix = $previousPrefix;
     }
 
     /**
@@ -135,16 +147,16 @@ class Router
     {
         $method = $_SERVER['REQUEST_METHOD'];
         $url = $_SERVER["REQUEST_URI"];
-        
+
         $urlParts = explode('?', $url);
         $url = trim($urlParts[0], "/");
-        
+
         if (isset($urlParts[1])) {
             parse_str($urlParts[1], $_GET);
         }
 
         $matchedRoute = $this->matchRoute($method, $url);
-        
+
         if ($matchedRoute) {
             if (!$this->executeMiddlewares($matchedRoute['middlewares'])) {
                 return;
@@ -182,16 +194,16 @@ class Router
             if ($pattern === $url) {
                 return $route;
             }
-            
+
             $patternRegex = preg_replace('/\{([a-zA-Z0-9_]+)\}/', '([^/]+)', $pattern);
             $patternRegex = "#^{$patternRegex}$#";
-            
+
             if (preg_match($patternRegex, $url, $matches)) {
                 $route['params'] = array_slice($matches, 1);
                 return $route;
             }
         }
-        
+
         return null;
     }
 
@@ -202,25 +214,25 @@ class Router
     {
         foreach ($middlewares as $middleware) {
             $middlewareClass = "App\\Middlewares\\" . $middleware;
-            
+
             if (!class_exists($middlewareClass)) {
                 $this->showError(500, "Middleware class '{$middlewareClass}' does not exist.");
                 return false;
             }
-            
+
             $middlewareObj = new $middlewareClass();
-            
+
             if (!method_exists($middlewareObj, 'handle')) {
                 $this->showError(500, "Middleware '{$middleware}' does not have handle method.");
                 return false;
             }
-            
+
             if (!$middlewareObj->handle()) {
                 $this->handleMiddlewareFailure($middlewareObj);
                 return false;
             }
         }
-        
+
         return true;
     }
 
@@ -233,13 +245,13 @@ class Router
             $middleware->onFailure();
             return;
         }
-        
+
         if (method_exists($middleware, 'redirectTo')) {
             $redirectUrl = $middleware->redirectTo();
             header("Location: {$redirectUrl}");
             exit();
         }
-        
+
         $this->showError(403, "Access denied.");
     }
 
@@ -249,7 +261,6 @@ class Router
     protected function callControllerMethod($controller, $method, $params)
     {
         $controllerClass = "App\\Controllers\\" . $controller;
-
         $controllerFile = "app/Controllers/{$controller}.php";
 
         if (!file_exists($controllerFile)) {
@@ -264,13 +275,13 @@ class Router
 
             if (method_exists($controllerObj, $method)) {
                 $debugEnabled = class_exists('System\\Core\\Debug') && Env::get('DEBUG_MODE') === 'true';
-                
+
                 if ($debugEnabled) {
                     $startTime = microtime(true);
                 }
-                
+
                 call_user_func_array([$controllerObj, $method], $params);
-                
+
                 if ($debugEnabled) {
                     $endTime = microtime(true);
                     \System\Core\Debug::addQuery(
@@ -297,11 +308,11 @@ class Router
         if (!is_dir($logDir)) {
             mkdir($logDir, 0777, true);
         }
-        
+
         $logFile = $logDir . '/error_' . date('Y-m-d') . '.log';
         $dateTime = date('Y-m-d H:i:s');
         $logMessage = "[{$dateTime}] ERROR: {$message}\n";
-        
+
         file_put_contents($logFile, $logMessage, FILE_APPEND);
     }
 
@@ -313,18 +324,17 @@ class Router
         http_response_code($code);
 
         $errorFile = __DIR__ . "/../app/Views/errors/{$code}.php";
-        
+
         if (file_exists($errorFile)) {
             include($errorFile);
-            
             $this->logError("{$code} {$message}");
             return;
         }
 
         $this->logError("{$code} {$message}");
-        
+
         $errorConfig = $this->getErrorConfig($code);
-        
+
         ?>
         <!DOCTYPE html>
         <html lang="en">
@@ -569,7 +579,7 @@ class Router
                     <div class="error-code"><?= $code ?></div>
                     <h1 class="error-title"><?= $errorConfig['title'] ?></h1>
                     <p class="error-message"><?= $errorConfig['message'] ?></p>
-                    
+
                     <div class="error-actions">
                         <a href="/" class="btn btn-primary">
                             <i class="fas fa-home"></i> Go Home
@@ -587,14 +597,14 @@ class Router
 
                 <div class="footer">
                     <p>&copy; <?= date("Y") ?> CodeIgniter Alternative Framework - v2.0.0</p>
-                    <p>PHP <?= PHP_VERSION ?> • Server: <?= $_SERVER['SERVER_SOFTWARE'] ?? 'Unknown' ?></p>
+                    <p>PHP <?= PHP_VERSION ?> | Server: <?= $_SERVER['SERVER_SOFTWARE'] ?? 'Unknown' ?></p>
                 </div>
             </div>
 
             <script>
                 document.addEventListener('DOMContentLoaded', function() {
                     const errorCode = document.querySelector('.error-code');
-                    
+
                     errorCode.addEventListener('click', function() {
                         this.style.animation = 'none';
                         setTimeout(() => {
@@ -636,7 +646,7 @@ class Router
                 'icon' => 'fa-exclamation-triangle',
                 'color' => '#ffc107',
                 'colorDark' => '#e0a800',
-                'consoleIcon' => '⚠️',
+                'consoleIcon' => '\u26A0',
                 'consoleMessage' => 'The server could not understand the request due to invalid syntax.'
             ],
             401 => [
@@ -645,7 +655,7 @@ class Router
                 'icon' => 'fa-user-lock',
                 'color' => '#ff6b35',
                 'colorDark' => '#e55a2b',
-                'consoleIcon' => '🔐',
+                'consoleIcon' => '\uD83D\uDD12',
                 'consoleMessage' => 'Authentication required for this resource.'
             ],
             403 => [
@@ -654,7 +664,7 @@ class Router
                 'icon' => 'fa-ban',
                 'color' => '#dc3545',
                 'colorDark' => '#c82333',
-                'consoleIcon' => '🚫',
+                'consoleIcon' => '\uD83D\uDEAB',
                 'consoleMessage' => 'Access to this resource is forbidden.'
             ],
             404 => [
@@ -663,7 +673,7 @@ class Router
                 'icon' => 'fa-search',
                 'color' => '#6c757d',
                 'colorDark' => '#545b62',
-                'consoleIcon' => '🔍',
+                'consoleIcon' => '\uD83D\uDD0D',
                 'consoleMessage' => 'The requested URL was not found on this server.'
             ],
             405 => [
@@ -672,7 +682,7 @@ class Router
                 'icon' => 'fa-times-circle',
                 'color' => '#fd7e14',
                 'colorDark' => '#e56a00',
-                'consoleIcon' => '❌',
+                'consoleIcon' => '\u274C',
                 'consoleMessage' => 'The request method is not allowed for this resource.'
             ],
             500 => [
@@ -681,7 +691,7 @@ class Router
                 'icon' => 'fa-server',
                 'color' => '#dc3545',
                 'colorDark' => '#c82333',
-                'consoleIcon' => '🚨',
+                'consoleIcon' => '\uD83D\uDD04',
                 'consoleMessage' => 'The server encountered an unexpected condition.'
             ],
             503 => [
@@ -690,7 +700,7 @@ class Router
                 'icon' => 'fa-tools',
                 'color' => '#17a2b8',
                 'colorDark' => '#138496',
-                'consoleIcon' => '🔧',
+                'consoleIcon' => '\uD83D\uDD27',
                 'consoleMessage' => 'The server is temporarily unavailable.'
             ]
         ];
@@ -701,7 +711,7 @@ class Router
             'icon' => 'fa-exclamation-circle',
             'color' => '#6c757d',
             'colorDark' => '#545b62',
-            'consoleIcon' => '💥',
+            'consoleIcon' => '\u2757',
             'consoleMessage' => 'An unexpected server error occurred.'
         ];
     }
