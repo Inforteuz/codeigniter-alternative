@@ -102,6 +102,11 @@ class BaseController
     */
     private function initializeSession()
     {
+
+        if (session_status() === PHP_SESSION_ACTIVE) {
+        session_write_close();
+        }
+
         $sessionPath = __DIR__ . '/../writable/session';
 
         if (!is_dir($sessionPath)) {
