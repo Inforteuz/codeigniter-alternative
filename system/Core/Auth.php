@@ -1,6 +1,7 @@
 <?php
 namespace System\Core;
 
+use System\BaseModel;
 use App\Models\UserModel;
 use System\Core\Session;
 
