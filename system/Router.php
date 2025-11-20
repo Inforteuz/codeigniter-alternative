@@ -65,6 +65,7 @@ class Router
      */
     public function addRoute($method, $pattern, $controller, $action, $middlewares = [])
     {
+        // Apply current prefix
         $fullPattern = $this->prefix ? trim($this->prefix, '/') . '/' . trim($pattern, '/') : $pattern;
         $fullPattern = trim($fullPattern, '/');
 
@@ -82,20 +83,25 @@ class Router
      */
     public function group($options, $callback)
     {
+        // Save current state
         $previousMiddlewares = $this->middlewares;
         $previousPrefix = $this->prefix;
 
+        // Merge middlewares
         if (isset($options['middleware'])) {
             $this->middlewares = array_merge($this->middlewares, (array)$options['middleware']);
         }
 
+        // Apply prefix if exists
         if (isset($options['prefix']) && is_string($options['prefix'])) {
             $this->prefix = trim($previousPrefix, '/') . '/' . trim($options['prefix'], '/');
             $this->prefix = trim($this->prefix, '/');
         }
 
+        // Execute group callback
         call_user_func($callback, $this);
 
+        // Restore previous state
         $this->middlewares = $previousMiddlewares;
         $this->prefix = $previousPrefix;
     }
