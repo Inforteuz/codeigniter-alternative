@@ -9,8 +9,8 @@
  *
  * @package    CodeIgniter Alternative
  * @subpackage System
- * @version    1.0.0
- * @date       2024-12-01
+ * @version    1.1.0  [Enhanced for kebab-case URL support]
+ * @date       2025-11-21
  */
 
 namespace System;
@@ -19,7 +19,7 @@ use System\Core\Env;
 use System\Core\DebugToolbar;
 
 /**
- * The Router class handles HTTPS requests.
+ * The Router class handles HTTP requests and routes them to controllers.
  */
 class Router
 {
@@ -65,7 +65,6 @@ class Router
      */
     public function addRoute($method, $pattern, $controller, $action, $middlewares = [])
     {
-        // Apply current prefix
         $fullPattern = $this->prefix ? trim($this->prefix, '/') . '/' . trim($pattern, '/') : $pattern;
         $fullPattern = trim($fullPattern, '/');
 
@@ -184,6 +183,7 @@ class Router
 
     /**
      * Finding the right route by URL
+     * Enhanced to support kebab-case (e.g., business-plan) → business_plan
      */
     protected function matchRoute($method, $url)
     {
@@ -191,16 +191,30 @@ class Router
             return null;
         }
 
+        $normalizedUrl = str_replace('-', '_', $url);
+
         foreach ($this->routes[$method] as $pattern => $route) {
-            if ($pattern === $url) {
+            $normalizedPattern = str_replace('-', '_', $pattern);
+
+            if ($normalizedPattern === $normalizedUrl) {
                 return $route;
             }
 
-            $patternRegex = preg_replace('/\{([a-zA-Z0-9_]+)\}/', '([^/]+)', $pattern);
+            $patternRegex = preg_replace_callback('/\{([a-zA-Z0-9_\-]+)(?::([^}]+))?\}/', function ($matches) {
+                $name = $matches[1];
+                $regex = $matches[2] ?? '[^/]+';
+                return "(?P<{$name}>{$regex})";
+            }, $normalizedPattern);
             $patternRegex = "#^{$patternRegex}$#";
 
-            if (preg_match($patternRegex, $url, $matches)) {
-                $route['params'] = array_slice($matches, 1);
+            if (preg_match($patternRegex, $normalizedUrl, $matches)) {
+                $routeParams = [];
+                foreach ($matches as $key => $value) {
+                    if (!is_int($key)) {
+                        $routeParams[$key] = $value;
+                    }
+                }
+                $route['params'] = array_values($routeParams); 
                 return $route;
             }
         }
@@ -292,7 +306,7 @@ class Router
                     );
                 }
             } else {
-                $this->showError(404, "Method '{$method}' does not exist.");
+                $this->showError(404, "Method '{$method}' does not exist in controller '{$controllerClass}'.");
             }
         } else {
             $this->showError(404, "Controller class '{$controllerClass}' does not exist.");
@@ -728,6 +742,10 @@ class Router
         $controller = ucfirst($segments[0]) . "Controller";
         $method = $segments[1] ?? "index";
         $params = array_slice($segments, 2);
+
+        $method = preg_replace_callback('/-(.)/', function ($m) {
+            return strtoupper($m[1]);
+        }, $method);
 
         $this->callControllerMethod($controller, $method, $params);
     }
