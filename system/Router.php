@@ -1,16 +1,13 @@
 <?php
 
 /**
- * Router.php
+ * Router.php — v1.2.0
+ * 
+ * Enhanced to auto-normalize REQUEST_URI when Valet serves full path
+ * (e.g., /Users/.../writable/uploads/xxx.pdf → writable/uploads/xxx.pdf)
  *
- * This file is responsible for handling URL routing and directing HTTP requests
- * to the appropriate controller and method. The Router class is a core component
- * of your custom MVC framework.
- *
- * @package    CodeIgniter Alternative
- * @subpackage System
- * @version    1.1.0  [Enhanced for kebab-case URL support]
- * @date       2025-11-21
+ * @version    1.2.0
+ * @date       2025-11-26
  */
 
 namespace System;
@@ -18,32 +15,18 @@ namespace System;
 use System\Core\Env;
 use System\Core\DebugToolbar;
 
-/**
- * The Router class handles HTTP requests and routes them to controllers.
- */
 class Router
 {
-    /**
-     * @var array $routes - All registered routes
-     */
     protected $routes = [];
     protected $middlewares = [];
     protected $prefix = '';
 
-    /**
-     * Router constructor - Load routes from app/Routes/Routes.php
-     */
     public function __construct()
     {
         Env::load();
         $this->loadAppRoutes();
     }
 
-    /**
-     * Load application routes from app/Routes/Routes.php
-     *
-     * @throws \Exception if the routes file does not exist
-     */
     protected function loadAppRoutes()
     {
         $routesFile = dirname(__DIR__) . '/app/Routes/Routes.php';
@@ -60,9 +43,6 @@ class Router
         }
     }
 
-    /**
-     * Add a new route
-     */
     public function addRoute($method, $pattern, $controller, $action, $middlewares = [])
     {
         $fullPattern = $this->prefix ? trim($this->prefix, '/') . '/' . trim($pattern, '/') : $pattern;
@@ -77,9 +57,6 @@ class Router
         DebugToolbar::log("Route registered: {$method} {$fullPattern} -> {$controller}::{$action}", 'router');
     }
 
-    /**
-     * Add multiple routes with same middleware and optional prefix
-     */
     public function group($options, $callback)
     {
         $previousMiddlewares = $this->middlewares;
@@ -100,59 +77,51 @@ class Router
         $this->prefix = $previousPrefix;
     }
 
-    /**
-     * Add GET route
-     */
     public function get($pattern, $controller, $action, $middlewares = [])
     {
         return $this->addRoute('GET', $pattern, $controller, $action, array_merge($this->middlewares, $middlewares));
     }
 
-    /**
-     * Add POST route
-     */
     public function post($pattern, $controller, $action, $middlewares = [])
     {
         return $this->addRoute('POST', $pattern, $controller, $action, array_merge($this->middlewares, $middlewares));
     }
 
-    /**
-     * Add PUT route
-     */
     public function put($pattern, $controller, $action, $middlewares = [])
     {
         return $this->addRoute('PUT', $pattern, $controller, $action, array_merge($this->middlewares, $middlewares));
     }
 
-    /**
-     * Add DELETE route
-     */
     public function delete($pattern, $controller, $action, $middlewares = [])
     {
         return $this->addRoute('DELETE', $pattern, $controller, $action, array_merge($this->middlewares, $middlewares));
     }
 
-    /**
-     * Add PATCH route
-     */
     public function patch($pattern, $controller, $action, $middlewares = [])
     {
         return $this->addRoute('PATCH', $pattern, $controller, $action, array_merge($this->middlewares, $middlewares));
     }
 
     /**
-     * Processes the HTTP request.
+     * Processes the HTTP request
      */
     public function handleRequest()
     {
         $method = $_SERVER['REQUEST_METHOD'];
         $url = $_SERVER["REQUEST_URI"];
 
+        $url = $this->normalizeRequestUri($url);
+
         $urlParts = explode('?', $url);
         $url = trim($urlParts[0], "/");
 
         if (isset($urlParts[1])) {
             parse_str($urlParts[1], $_GET);
+        }
+
+        if ($this->isFileRequest($url)) {
+            $this->serveFile($url);
+            return;
         }
 
         $matchedRoute = $this->matchRoute($method, $url);
@@ -182,9 +151,118 @@ class Router
     }
 
     /**
-     * Finding the right route by URL
-     * Enhanced to support kebab-case (e.g., business-plan) → business_plan
+     * Normalize REQUEST_URI: strip base path 
      */
+    protected function normalizeRequestUri($uri)
+    {
+        $path = explode('?', $uri)[0];
+
+        $baseDir = dirname(__DIR__, 1); 
+
+        $baseDir = str_replace('\\', '/', $baseDir);
+        $path = str_replace('\\', '/', $path);
+
+        if (strpos($path, $baseDir) === 0) {
+            $cleanPath = substr($path, strlen($baseDir));
+            if ($cleanPath === '') $cleanPath = '/';
+            return $cleanPath;
+        }
+
+        if (isset($_SERVER['DOCUMENT_ROOT'])) {
+            $docRoot = str_replace('\\', '/', rtrim($_SERVER['DOCUMENT_ROOT'], '/'));
+            if (strpos($path, $docRoot) === 0) {
+                $cleanPath = substr($path, strlen($docRoot));
+                return $cleanPath ?: '/';
+            }
+        }
+
+        return $uri;
+    }
+
+    /**
+     * Check if the request is likely for a static file (contains '.').
+     */
+    protected function isFileRequest($url)
+    {
+        return strpos($url, '.') !== false;
+    }
+
+    /**
+     * Safely serve static files from allowed directories.
+     */
+    protected function serveFile($url)
+    {
+        $baseDir = dirname(__DIR__, 1); 
+        $filePath = $baseDir . '/' . ltrim($url, '/');
+
+        $realPath = realpath($filePath);
+
+        if ($realPath === false) {
+            $this->showError(404, "File not found: {$url}");
+            return;
+        }
+
+        $allowedSubDirs = [
+            'writable/uploads',
+            'public',
+        ];
+
+        $isAllowed = false;
+        foreach ($allowedSubDirs as $subDir) {
+            $allowedRealPath = realpath($baseDir . '/' . $subDir);
+            if ($allowedRealPath && (
+                $realPath === $allowedRealPath ||
+                strpos($realPath, $allowedRealPath . DIRECTORY_SEPARATOR) === 0
+            )) {
+                $isAllowed = true;
+                break;
+            }
+        }
+
+        if (!$isAllowed) {
+            $this->showError(403, "Access denied: File is outside allowed directories.");
+            return;
+        }
+
+        if (!is_file($realPath)) {
+            $this->showError(404, "Not a file: {$url}");
+            return;
+        }
+
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mimeType = finfo_file($finfo, $realPath);
+        finfo_close($finfo);
+
+        $ext = strtolower(pathinfo($realPath, PATHINFO_EXTENSION));
+        $mimeMap = [
+            'pdf' => 'application/pdf',
+            'jpg' => 'image/jpeg',
+            'jpeg' => 'image/jpeg',
+            'png' => 'image/png',
+            'gif' => 'image/gif',
+            'svg' => 'image/svg+xml',
+            'webp' => 'image/webp',
+            'txt' => 'text/plain',
+            'csv' => 'text/csv',
+            'css' => 'text/css',
+            'js' => 'application/javascript',
+            'json' => 'application/json',
+            'zip' => 'application/zip',
+        ];
+        if (!$mimeType || $mimeType === 'application/octet-stream') {
+            $mimeType = $mimeMap[$ext] ?? 'application/octet-stream';
+        }
+
+        header('Content-Type: ' . $mimeType);
+        header('Content-Length: ' . filesize($realPath));
+        header('Cache-Control: private, max-age=86400');
+        header('X-Content-Type-Options: nosniff');
+        header('X-Frame-Options: SAMEORIGIN');
+
+        readfile($realPath);
+        exit();
+    }
+
     protected function matchRoute($method, $url)
     {
         if (!isset($this->routes[$method])) {
@@ -214,7 +292,7 @@ class Router
                         $routeParams[$key] = $value;
                     }
                 }
-                $route['params'] = array_values($routeParams); 
+                $route['params'] = array_values($routeParams);
                 return $route;
             }
         }
@@ -222,9 +300,6 @@ class Router
         return null;
     }
 
-    /**
-     * Implementing middleware
-     */
     protected function executeMiddlewares($middlewares)
     {
         foreach ($middlewares as $middleware) {
@@ -251,9 +326,6 @@ class Router
         return true;
     }
 
-    /**
-     * Action to take when middleware fails
-     */
     protected function handleMiddlewareFailure($middleware)
     {
         if (method_exists($middleware, 'onFailure')) {
@@ -270,9 +342,6 @@ class Router
         $this->showError(403, "Access denied.");
     }
 
-    /**
-     * Controller and method call
-     */
     protected function callControllerMethod($controller, $method, $params)
     {
         $controllerClass = "App\\Controllers\\" . $controller;
@@ -313,9 +382,6 @@ class Router
         }
     }
 
-    /**
-     * Writes errors to a log file.
-     */
     protected function logError($message)
     {
         $logDir = __DIR__ . '/../writable/logs';
@@ -331,9 +397,6 @@ class Router
         file_put_contents($logFile, $logMessage, FILE_APPEND);
     }
 
-    /**
-     * It displays the error and writes it to the log.
-     */
     private function showError($code, $message)
     {
         http_response_code($code);
@@ -649,9 +712,6 @@ class Router
         <?php
     }
 
-    /**
-     * Get error configuration based on error code
-     */
     private function getErrorConfig($code)
     {
         $configs = [
@@ -731,9 +791,6 @@ class Router
         ];
     }
 
-    /**
-     * Fallback to dynamic routing (controller/method/params)
-     */
     protected function handleDynamicRoute($url)
     {
         $url = $url ? $url : "home/index";
@@ -750,9 +807,6 @@ class Router
         $this->callControllerMethod($controller, $method, $params);
     }
 
-    /**
-     * Get all registered routes (for debugging)
-     */
     public function getRoutes()
     {
         return $this->routes;
