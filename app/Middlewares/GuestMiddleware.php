@@ -24,7 +24,12 @@ class GuestMiddleware extends BaseController
      */
     public function handle($request, $next)
     {
-        return !(isset($_SESSION['logged_in']) && $_SESSION['logged_in']);
+        if (isset($_SESSION['logged_in']) && $_SESSION['logged_in']) {
+            $this->redirectTo();
+            return false;
+        }
+
+        return $next($request);
     }
     
     /**
@@ -34,7 +39,8 @@ class GuestMiddleware extends BaseController
      */
     public function redirectTo()
     {
-        return '/user/dashboard';
+        header("Location: /tasks");
+        exit();
     }
     
     /**

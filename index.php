@@ -22,6 +22,10 @@
  * =========================================================
  */
 
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 require_once 'autoloader.php';
 require_once 'app/Controllers/MigrateController.php';
 
@@ -33,28 +37,38 @@ use System\ErrorHandler;
 
 Env::load();
 
-DebugToolbar::init();
+// --- PREPARE SESSION ---
+if (session_status() === PHP_SESSION_NONE) {
+    $sessionPath = __DIR__ . '/writable/session';
+    if (!is_dir($sessionPath)) {
+        mkdir($sessionPath, 0777, true);
+    }
+    session_save_path($sessionPath);
 
+    $cookieName = Env::get('SESSION_NAME', 'ci4_session');
+    $cookieSecure = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on';
+    
+    session_name($cookieName);
+    session_set_cookie_params([
+        'lifetime' => (int)Env::get('SESSION_LIFETIME', 7200),
+        'path'     => Env::get('SESSION_PATH', '/'),
+        'domain'   => Env::get('SESSION_DOMAIN', ''),
+        'secure'   => $cookieSecure,
+        'httponly' => true,
+        'samesite' => 'Lax'
+    ]);
+    
+    session_start();
+}
+
+DebugToolbar::init();
 ErrorHandler::register();
 
 if (Env::get('APP_DEBUG') === 'true') {
     Debug::init();
 }
 
-setcookie(
-    'ci_session',
-    hash('sha256', time() . uniqid(mt_rand(), true)),
-    [
-        'expires'  => time() + (3600 * 24 * 7),
-        'path'     => '/',
-        'secure'   => true,
-        'httponly' => true,
-        'samesite' => 'Lax'
-    ]
-);
-
-$migrateController = new \App\Controllers\MigrateController();
-$migrateController->migrate();
+// Migrations should be run via CLI: php bin/framework migrate
 
 $router = new Router();
 $router->handleRequest();

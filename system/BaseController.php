@@ -91,6 +91,7 @@ class BaseController
         // Boot a standalone View Engine pointed at app/Views/
         $viewPath = __DIR__ . '/../app/Views';
         $this->engine = new ViewEngine($viewPath);
+        $this->engine->setController($this);
 
         $this->initializeSession();
         $this->db = Database::getInstance();
@@ -124,42 +125,7 @@ class BaseController
     */
     private function initializeSession()
     {
-
-        if (session_status() === PHP_SESSION_ACTIVE) {
-        session_write_close();
-        }
-
-        $sessionPath = __DIR__ . '/../writable/session';
-
-        if (!is_dir($sessionPath)) {
-            if (!mkdir($sessionPath, 0777, true) && !is_dir($sessionPath)) {
-                $this->logError('Session: Failed to create session save path: ' . $sessionPath);
-                if (session_status() === PHP_SESSION_NONE) {
-                    session_start();
-                }
-                return;
-            }
-        }
-
-        session_save_path($sessionPath);
-        $cookieName = Env::get('SESSION_NAME', 'ci4_session');
-        $cookieLifetime = (int)Env::get('SESSION_LIFETIME', 7200);
-        $cookiePath = Env::get('SESSION_PATH', '/');
-        $cookieDomain = Env::get('SESSION_DOMAIN', '');
-        $cookieSecure = (bool)Env::get('SESSION_SECURE', isset($_SERVER['HTTPS']));
-        $cookieHttpOnly = (bool)Env::get('SESSION_HTTPONLY', true);
-        $cookieSameSite = Env::get('SESSION_SAMESITE', 'Lax');
-
-        session_name($cookieName);
-        session_set_cookie_params([
-            'lifetime' => $cookieLifetime,
-            'path' => $cookiePath,
-            'domain' => $cookieDomain,
-            'secure' => $cookieSecure,
-            'httponly' => $cookieHttpOnly,
-            'samesite' => $cookieSameSite
-        ]);
-
+        // Session is initialized globally in index.php
         if (session_status() === PHP_SESSION_NONE) {
             session_start();
         }
@@ -847,42 +813,31 @@ class BaseController
      */
     protected function registerViewComposers()
     {
-    
-       $this->viewComposers['layouts/default'] = '\App\Composers\GlobalComposer@composeLayout';
-    // $this->viewComposers['partials/header'] = '\App\Composers\GlobalComposer@composeHeader';
-    // $this->viewComposers['admin/dashboard'] = '\App\Composers\GlobalComposer@composeDashboard';
-
+        $this->engine->addComposer('*', '\App\Composers\GlobalComposer@composeGlobal');
     }
 
-    /**
-     * Run view composers for a specific view
-     */
     protected function runViewComposers($view)
     {
-        $composersToRun = [];
-        if (isset($this->viewComposers['*'])) {
-            $composersToRun[] = $this->viewComposers['*'];
+        // For backwards compatibility, the engine's render() or runComposers isn't 
+        // directly called by BaseController's legacy view() method, 
+        // so we manually trigger the Engine's composers here and merge the data back.
+        
+        // The Engine handles its own registry now via addComposer()
+        $reflection = new \ReflectionClass($this->engine);
+        $method = $reflection->getMethod('runComposers');
+        $method->setAccessible(true);
+        
+        // Run composers for '*'
+        $method->invokeArgs($this->engine, ['*']);
+        // Run composers for layout
+        if ($this->layout) {
+            $method->invokeArgs($this->engine, [$this->layout]);
         }
-        if ($this->layout && isset($this->viewComposers[$this->layout])) {
-            $composersToRun[] = $this->viewComposers[$this->layout];
-        }
-        if (isset($this->viewComposers[$view])) {
-            $composersToRun[] = $this->viewComposers[$view];
-        }
+        // Run composers for view
+        $method->invokeArgs($this->engine, [$view]);
 
-        foreach (array_unique($composersToRun) as $composer) {
-            if (is_callable($composer)) {
-                $composer($this);
-            } elseif (is_string($composer) && strpos($composer, '@') !== false) {
-                list($class, $method) = explode('@', $composer);
-                if (class_exists($class)) { 
-                    $composerInstance = new $class();
-                    if (method_exists($composerInstance, $method)) {
-                        $composerInstance->$method($this);
-                    }
-                }
-            }
-        }
+        // Merge the populated shared data from the engine into the local controller data
+        $this->viewData = array_merge($this->viewData, $this->engine->getViewData());
     }
 
     /**
@@ -894,75 +849,53 @@ class BaseController
     protected function view($view, $data = [])
     {
         if ($this->viewRendered) {
-            return;
+             return;
         }
+
         $hasFlash = false;
         if (isset($_SESSION)) {
-            foreach ($_SESSION as $key => $value) {
-                if (stripos($key, 'flash') !== false && !empty($value)) {
-                    $hasFlash = true;
-                    break;
-                }
+            if (isset($_SESSION['_flash'])) {
+                $this->engine->share('_flash', $_SESSION['_flash']);
+                unset($_SESSION['_flash']);
+                $hasFlash = true;
+            }
+            if (isset($_SESSION['_errors'])) {
+                $this->validationErrors = $_SESSION['_errors'];
+                $this->engine->share('errors', $this->validationErrors);
+                unset($_SESSION['_errors']);
             }
         }
-        $cacheKey = 'view_' . md5($view . serialize($data));
-        $cachedView = null;
-        
+
+        // Handle full-page caching if enabled
+        $cacheKey = "view_{$view}_" . md5(json_encode($data) . $this->request['uri']);
         if ($this->isViewCachingEnabled() && !$this->isDebug() && !$hasFlash) {
             $cachedView = $this->cache($cacheKey, null, 1);
+            if ($cachedView !== null) {
+                echo $cachedView;
+                $this->viewRendered = true;
+                return;
+            }
         }
-        
-        if ($cachedView !== null) {
-            echo $cachedView;
-            $this->viewRendered = true;
-            return;
-        }
+
+        ob_start();
         try {
-            $this->runViewComposers($view);
-            $this->sections = [];
-            $this->currentSection = null;
-            $this->viewData = array_merge($this->viewData, $data);
-            if ($this->shouldExcludeFromLayout($view)) {
-                $this->useLayout = false;
-            }
-            $viewFile = $this->getViewPath($view);
-            if (!file_exists($viewFile)) {
-                throw new \Exception("View file \"{$view}.php\" not found at {$viewFile}");
-            }
-            if ($this->isDebug()) {
-                echo "\n\n";
-            }
-            ob_start();
-            extract($this->viewData, EXTR_SKIP);
-            require $viewFile;
-            $rogueContent = ob_get_clean();
-            if ($this->useLayout && $this->layout) {
-                if (!isset($this->sections['content'])) {
-                    $this->sections['content'] = $rogueContent;
-                }
-                $output = $this->renderWithLayout($this->layout);
-            } else {
-                $output = $rogueContent;
-            }
-            if ($this->isDebug()) {
-                $output .= "\n\n";
-            }
-
-            if ($this->isHtmlMinifyEnabled() && !$this->isDebug()) {
-                $output = $this->minifyHtml($output);
-            }
-
-            if ($this->isViewCachingEnabled() && !$this->isDebug() && !$hasFlash) {
-                $this->cache($cacheKey, $output, 3600);
-            } else {
-                $this->cache($cacheKey, null, 0);
-            }
-            
-            echo $output;
-            $this->viewRendered = true;
+            $this->engine->render($view, $data, false);
         } catch (\Throwable $e) {
             $this->handleViewError($e);
+            return;
         }
+        $output = ob_get_clean();
+
+        if ($this->isHtmlMinifyEnabled() && !$this->isDebug()) {
+            // $output = $this->minifyHtml($output);
+        }
+
+        if ($this->isViewCachingEnabled() && !$this->isDebug() && !$hasFlash) {
+            $this->cache($cacheKey, $output, $this->getViewCacheTtl());
+        }
+
+        echo $output;
+        $this->viewRendered = true;
     }
 
     /**

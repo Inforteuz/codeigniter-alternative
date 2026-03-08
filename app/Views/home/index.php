@@ -640,14 +640,23 @@
                 A lightweight, fast, and modern PHP MVC framework designed for developers who value simplicity, performance, and clean code architecture.
             </p>
             <div class="cta-buttons">
-                <a href="#documentation" class="btn btn-primary">
-                    <i class="fas fa-book-open"></i> View documentation
-                </a>
+                <?php if (isset($is_authenticated) && $is_authenticated): ?>
+                    <a href="/tasks" class="btn btn-primary">
+                        <i class="fas fa-tasks"></i> Go to My Tasks
+                    </a>
+                    <a href="/logout" class="btn btn-secondary text-danger">
+                        <i class="fas fa-sign-out-alt"></i> Logout
+                    </a>
+                <?php else: ?>
+                    <a href="/register" class="btn btn-primary">
+                        <i class="fas fa-user-plus"></i> Get Started for Free
+                    </a>
+                    <a href="/login" class="btn btn-secondary">
+                        <i class="fas fa-sign-in-alt"></i> Login
+                    </a>
+                <?php endif; ?>
                 <a href="https://github.com/Inforteuz/codeigniter-alternative" target="_blank" class="btn btn-secondary">
-                    <i class="fab fa-github"></i> GitHub repository
-                </a>
-                <a href="#quick-start" class="btn btn-secondary">
-                    <i class="fas fa-rocket"></i> Quick start
+                    <i class="fab fa-github"></i> GitHub
                 </a>
             </div>
         </header>

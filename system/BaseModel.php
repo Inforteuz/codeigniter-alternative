@@ -1650,6 +1650,11 @@ class BaseModel
         return $this->insert($this->table, $data);
     }
 
+    public function updateModel($id, $data)
+    {
+        return $this->update($this->table, $data, [$this->primaryKey => $id]);
+    }
+
     /**
      * Enhanced update with callbacks and timestamps
      * @param string $table

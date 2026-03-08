@@ -1,0 +1,19 @@
+Container (Tests\Core\Container)
+ [x] Singleton instance
+ [x] Bind and make with closure
+ [x] Singleton binding
+ [x] Auto wiring
+
+Engine (Tests\Core\View\Engine)
+ [x] Render simple view
+ [x] Render with layout
+
+Pipeline (Tests\Core\Middleware\Pipeline)
+ [x] Pipeline execution
+
+Router (Tests\Core\Router)
+ [x] Closure route
+ [x] Controller route
+ [x] Route with parameters
+ [x] Route group with prefix
+

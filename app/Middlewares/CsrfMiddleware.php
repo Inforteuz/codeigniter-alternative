@@ -29,7 +29,7 @@ class CsrfMiddleware extends BaseController
             return $next($request);
         }
         
-        $token = $_POST['_csrf'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+        $token = $_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
         
         if (!$this->validateCsrfToken($token)) {
             return false;

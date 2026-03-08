@@ -36,6 +36,12 @@
 
 $router->get('', 'HomeController', 'index');
 
+// Auth Routes
+$router->get('login', 'AuthController', 'login');
+$router->post('login', 'AuthController', 'loginAttempt', ['CsrfMiddleware']);
+$router->get('register', 'AuthController', 'register');
+$router->post('register', 'AuthController', 'registerAttempt', ['CsrfMiddleware']);
+
 // Logout route (Accessible to all authenticated users)
 $router->get('logout', 'HomeController', 'logout');
 $router->post('logout', 'HomeController', 'logout');
@@ -45,6 +51,13 @@ $router->post('logout', 'HomeController', 'logout');
 // ====================================================================
 
 $router->get('dashboard', 'DashboardController', 'index', ['AuthMiddleware']);
+
+// Task Routes
+$router->get('tasks', 'TaskController', 'index', ['AuthMiddleware']);
+$router->get('tasks/create', 'TaskController', 'create', ['AuthMiddleware']);
+$router->post('tasks', 'TaskController', 'store', ['AuthMiddleware', 'CsrfMiddleware']);
+$router->post('tasks/{id}/complete', 'TaskController', 'complete', ['AuthMiddleware', 'CsrfMiddleware']);
+$router->get('tasks/{id}/delete', 'TaskController', 'delete', ['AuthMiddleware']);
 
 // ====================================================================
 //  API ROUTES (RESTful endpoints)

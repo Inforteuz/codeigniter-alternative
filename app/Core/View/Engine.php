@@ -20,6 +20,12 @@ class Engine
     protected $sections = [];
     protected $currentSection = null;
     
+    // Composers
+    protected $composers = [];
+
+    // Controller Proxy
+    protected $controller = null;
+
     // Asset stacks for scripts and styles
     protected $stacks = [];
     protected $currentStack = null;
@@ -38,11 +44,93 @@ class Engine
     }
 
     /**
+     * Get shared view data
+     */
+    public function getViewData(): array
+    {
+        return $this->viewData;
+    }
+
+    /**
+     * Set the parent controller for method proxying
+     */
+    public function setController($controller): self
+    {
+        $this->controller = $controller;
+        return $this;
+    }
+
+    /**
+     * Proxy unknown methods to the controller (for backward compatibility with legacy view helpers)
+     */
+    public function __call($method, $args)
+    {
+        if ($this->controller && method_exists($this->controller, $method)) {
+            return call_user_func_array([$this->controller, $method], $args);
+        }
+        throw new \BadMethodCallException("Method {$method} does not exist on Engine or its bound Controller.");
+    }
+
+    /**
+     * Share data across all views
+     */
+    public function share($key, $value = null): self
+    {
+        if (is_array($key)) {
+            $this->viewData = array_merge($this->viewData, $key);
+        } else {
+            $this->viewData[$key] = $value;
+        }
+        return $this;
+    }
+
+    /**
+     * Register a view composer
+     */
+    public function addComposer($views, $callback): self
+    {
+        $views = (array) $views;
+        foreach ($views as $view) {
+            if (!isset($this->composers[$view])) {
+                $this->composers[$view] = [];
+            }
+            $this->composers[$view][] = $callback;
+        }
+        return $this;
+    }
+
+    /**
+     * Run composers for a given view
+     */
+    protected function runComposers(string $view)
+    {
+        $composersToRun = array_merge(
+            $this->composers['*'] ?? [],
+            $this->composers[$view] ?? []
+        );
+
+        foreach (array_unique($composersToRun) as $composer) {
+            if (is_callable($composer)) {
+                $composer($this);
+            } elseif (is_string($composer) && strpos($composer, '@') !== false) {
+                list($class, $method) = explode('@', $composer);
+                if (class_exists($class)) {
+                    $instance = new $class();
+                    if (method_exists($instance, $method)) {
+                        $instance->$method($this);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
      * Render a view file
      */
     public function render(string $view, array $data = [], bool $return = false)
     {
         $this->viewData = array_merge($this->viewData, $data);
+        $this->runComposers($view);
 
         $viewFile = $this->getViewPath($view);
 
@@ -62,6 +150,7 @@ class Engine
             if (!isset($this->sections['content']) || empty($this->sections['content'])) {
                 $this->sections['content'] = $viewContent;
             }
+            $this->runComposers($this->layout);
             $content = $this->renderWithLayout($this->layout);
         } else {
             $content = $viewContent;

@@ -178,7 +178,8 @@ class Router
             }
         }
 
-        return $uri;
+        $path = str_replace('/index.php', '', $path);
+        return $path ?: '/';
     }
 
     /**
@@ -186,7 +187,19 @@ class Router
      */
     protected function isFileRequest($url)
     {
-        return strpos($url, '.') !== false;
+        if (strpos($url, '.') === false) {
+            return false;
+        }
+
+        $extension = pathinfo($url, PATHINFO_EXTENSION);
+        $excludedExtensions = ['php', 'phtml', 'php7', 'php8'];
+        $excludedFiles = ['index.php'];
+
+        if (in_array($extension, $excludedExtensions) || in_array($url, $excludedFiles)) {
+            return false;
+        }
+
+        return true;
     }
 
     /**
