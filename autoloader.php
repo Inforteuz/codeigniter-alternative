@@ -51,12 +51,18 @@ spl_autoload_register(function ($class) {
         // Get the class name after the namespace prefix
         $relativeClass = substr($class, strlen($appPrefix));
 
-        if (strpos($relativeClass, "\\Controllers\\") === 0) {
+        if (strpos($relativeClass, "Controllers\\") === 0) {
             // Build the path for the Controller file
-            $file = $baseDirs[0] . "Controllers" . str_replace("\\", "/", substr($relativeClass, strlen("Controllers\\"))) . ".php";
-        } elseif (strpos($relativeClass, "\\Models\\") === 0) {
+            $file = $baseDirs[0] . "Controllers/" . str_replace("\\", "/", substr($relativeClass, strlen("Controllers\\"))) . ".php";
+        } elseif (strpos($relativeClass, "Models\\") === 0) {
             // Build the path for the Model file
-            $file = $baseDirs[0] . "Models" . str_replace("\\", "/", substr($relativeClass, strlen("Models\\"))) . ".php";
+            $file = $baseDirs[0] . "Models/" . str_replace("\\", "/", substr($relativeClass, strlen("Models\\"))) . ".php";
+        } elseif (strpos($relativeClass, "Core\\") === 0) {
+            // App\Core\ — maps to app/Core/
+            $file = $baseDirs[0] . "Core/" . str_replace("\\", "/", substr($relativeClass, strlen("Core\\"))) . ".php";
+        } elseif (strpos($relativeClass, "Middlewares\\") === 0) {
+            // App\Middlewares\ — maps to app/Middlewares/
+            $file = $baseDirs[0] . "Middlewares/" . str_replace("\\", "/", substr($relativeClass, strlen("Middlewares\\"))) . ".php";
         } else {
             // General path for other "App" classes
             $file = $baseDirs[0] . str_replace("\\", "/", $relativeClass) . ".php";
@@ -78,5 +84,6 @@ spl_autoload_register(function ($class) {
         }
     }
 });
+
 
 ?>

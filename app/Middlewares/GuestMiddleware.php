@@ -22,7 +22,7 @@ class GuestMiddleware extends BaseController
      * 
      * @return bool True if user is a guest; false if logged in.
      */
-    public function handle()
+    public function handle($request, $next)
     {
         return !(isset($_SESSION['logged_in']) && $_SESSION['logged_in']);
     }

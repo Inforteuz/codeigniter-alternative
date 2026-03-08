@@ -22,10 +22,10 @@ class AuthMiddleware extends BaseController
      * 
      * @return bool Returns true if session is valid, otherwise false.
      */
-    public function handle()
+    public function handle($request, $next)
     {
         if ($this->isSessionValid()) {
-            return true;
+            return $next($request);
         }
         
         return false;
@@ -68,7 +68,7 @@ class AuthMiddleware extends BaseController
             return false;
         }
         
-        return true;
+        return $next($request);
     }
 }
 

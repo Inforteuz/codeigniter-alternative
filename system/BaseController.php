@@ -35,6 +35,8 @@ use System\Core\Debug;
 use System\Core\DebugToolbar;
 use System\Cache\Cache;
 use System\Cache\CacheHelper;
+use App\Core\Container;
+use App\Core\View\Engine as ViewEngine;
 
 class BaseController
 {
@@ -66,9 +68,29 @@ class BaseController
 
     protected $viewComposers = [];
 
+    /**
+     * DI Container — use $this->container->make(SomeService::class)
+     * @var Container
+     */
+    protected $container;
+
+    /**
+     * Standalone View Engine — for rendering outside the full view() pipeline
+     * e.g. $this->engine->render('emails/welcome', $data, true)
+     * @var ViewEngine
+     */
+    protected $engine;
+
     public function __construct()
     {
         Env::load();
+
+        // Boot the DI Container
+        $this->container = Container::getInstance();
+
+        // Boot a standalone View Engine pointed at app/Views/
+        $viewPath = __DIR__ . '/../app/Views';
+        $this->engine = new ViewEngine($viewPath);
 
         $this->initializeSession();
         $this->db = Database::getInstance();

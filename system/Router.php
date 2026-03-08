@@ -14,6 +14,8 @@ namespace System;
 
 use System\Core\Env;
 use System\Core\DebugToolbar;
+use App\Core\Container;
+use App\Core\Middleware\Pipeline;
 
 class Router
 {
@@ -300,27 +302,41 @@ class Router
         return null;
     }
 
+    /**
+     * Execute middlewares via Pipeline before dispatching controller.
+     * Each middleware must implement handle($request, $next)
+     */
     protected function executeMiddlewares($middlewares)
     {
-        foreach ($middlewares as $middleware) {
-            $middlewareClass = "App\\Middlewares\\" . $middleware;
+        if (empty($middlewares)) {
+            return true;
+        }
 
-            if (!class_exists($middlewareClass)) {
-                $this->showError(500, "Middleware class '{$middlewareClass}' does not exist.");
-                return false;
+        // Map short names to fully qualified class names
+        $pipes = array_map(function ($mw) {
+            if (strpos($mw, '\\') === false) {
+                return "App\\Middlewares\\{$mw}";
             }
+            return $mw;
+        }, $middlewares);
 
-            $middlewareObj = new $middlewareClass();
+        // We use the pipeline to pass a simple boolean request through middleware
+        // Middleware classes use the CI4-compatible handle($request, $next) signature
+        $result = true;
+        try {
+            $result = (new Pipeline())
+                ->send(true)            // pass a simple truthy payload
+                ->through($pipes)
+                ->then(fn($req) => $req); // destination: just return the payload
+        } catch (\Exception $e) {
+            // If any middleware throws or returns falsy via alternative path
+            $this->showError(403, $e->getMessage() ?: 'Access denied.');
+            return false;
+        }
 
-            if (!method_exists($middlewareObj, 'handle')) {
-                $this->showError(500, "Middleware '{$middleware}' does not have handle method.");
-                return false;
-            }
-
-            if (!$middlewareObj->handle()) {
-                $this->handleMiddlewareFailure($middlewareObj);
-                return false;
-            }
+        if (!$result) {
+            $this->showError(403, 'Access denied.');
+            return false;
         }
 
         return true;
@@ -342,10 +358,14 @@ class Router
         $this->showError(403, "Access denied.");
     }
 
+    /**
+     * Instantiate a controller via the DI Container and call the action method.
+     * Container auto-wires constructor dependencies.
+     */
     protected function callControllerMethod($controller, $method, $params)
     {
-        $controllerClass = "App\\Controllers\\" . $controller;
-        $controllerFile = "app/Controllers/{$controller}.php";
+        $controllerClass = "App\\Controllers\\{$controller}";
+        $controllerFile  = "app/Controllers/{$controller}.php";
 
         if (!file_exists($controllerFile)) {
             $this->showError(404, "Controller file '{$controllerFile}' does not exist.");
@@ -354,31 +374,35 @@ class Router
 
         require_once $controllerFile;
 
-        if (class_exists($controllerClass)) {
-            $controllerObj = new $controllerClass();
-
-            if (method_exists($controllerObj, $method)) {
-                $debugEnabled = class_exists('System\\Core\\Debug') && Env::get('DEBUG_MODE') === 'true';
-
-                if ($debugEnabled) {
-                    $startTime = microtime(true);
-                }
-
-                call_user_func_array([$controllerObj, $method], $params);
-
-                if ($debugEnabled) {
-                    $endTime = microtime(true);
-                    \System\Core\Debug::addQuery(
-                        "Controller: {$controller}::{$method}",
-                        $params,
-                        round(($endTime - $startTime) * 1000, 2)
-                    );
-                }
-            } else {
-                $this->showError(404, "Method '{$method}' does not exist in controller '{$controllerClass}'.");
-            }
-        } else {
+        if (!class_exists($controllerClass)) {
             $this->showError(404, "Controller class '{$controllerClass}' does not exist.");
+            return;
+        }
+
+        if (!method_exists($controllerClass, $method)) {
+            $this->showError(404, "Method '{$method}' does not exist in controller '{$controllerClass}'.");
+            return;
+        }
+
+        $debugEnabled = class_exists('System\\Core\\Debug') && Env::get('DEBUG_MODE') === 'true';
+
+        if ($debugEnabled) {
+            $startTime = microtime(true);
+        }
+
+        // Use Container for auto-wired instantiation instead of plain `new`
+        $container     = Container::getInstance();
+        $controllerObj = $container->make($controllerClass);
+
+        call_user_func_array([$controllerObj, $method], $params);
+
+        if ($debugEnabled) {
+            $endTime = microtime(true);
+            \System\Core\Debug::addQuery(
+                "Controller: {$controller}::{$method}",
+                $params,
+                round(($endTime - $startTime) * 1000, 2)
+            );
         }
     }
 

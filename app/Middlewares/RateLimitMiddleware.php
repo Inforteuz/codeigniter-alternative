@@ -17,7 +17,7 @@ class RateLimitMiddleware
      * 
      * @return bool Returns false if the request limit has been exceeded.
      */
-    public function handle()
+    public function handle($request, $next)
     {
         $ip = $this->getClientIp();
         $key = "rate_limit_{$ip}";
@@ -47,7 +47,7 @@ class RateLimitMiddleware
             return false;
         }
         
-        return true;
+        return $next($request);
     }
     
     /**
