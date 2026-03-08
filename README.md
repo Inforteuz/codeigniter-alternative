@@ -8,12 +8,13 @@ A lightweight and modern MVC framework inspired by CodeIgniter 4, built from scr
 
 - ✅ **MVC Architecture** (Model-View-Controller)
 - ⚙️ **Environment Configuration** via `.env`
-- 💾 **Database Abstraction** using PDO
-- 🔁 **Flexible Routing System** with Middleware support
-- 🛡️ **Middleware System** for Authentication, CORS, Rate-Limiting
-- 🔐 **Session Management** (Secure & Customizable)
-- 🐞 **Robust Error Handling & Debugging**
-- 🧪 **Built-in Migration and Seeding**
+- 💾 **Database Abstraction** using PDO (MySQL & SQLite support)
+- 🔁 **Advanced Router** with Middleware pipeline and Route Groups
+- 🛡️ **Middleware System** for Authentication, CORS, Rate-Limiting, CSRF 
+- 🔐 **Session Management** (Secure, Centralized Lifecycle)
+- 🐞 **Robust Error Handling & Debugging Toolbar**
+- 🎨 **Enhanced View Engine** with Extends/Sections and Global Composers
+- 🛠 **Built-in Developer CLI** (`bin/framework`) for generating code & migrating
 - 🧩 **API-Ready Structure**
 
 ---
@@ -47,18 +48,22 @@ This will automatically create the necessary tables.
 📁 Folder Structure
 project/
 ├── app/
+│   ├── Composers/          # Global View Composers
 │   ├── Controllers/        # Application logic (e.g., HomeController.php)
+│   ├── Core/               # App-level Core Services (DI Container, View Engine, Middleware Pipeline)
 │   ├── Models/             # Data models (e.g., UserModel.php)
 │   ├── Middlewares/        # Middleware classes (e.g., AuthMiddleware.php)
 │   └── Views/              # View files (HTML templates)
 ├── system/
-│   ├── Core/               # Framework core (e.g., Env, Middleware loader)
-│   ├── Database/           # PDO wrapper and DB tools
+│   ├── Core/               # Framework core (e.g., Env, Config)
+│   ├── Database/           # PDO wrapper and Schema/Blueprint tools
 │   ├── Router.php          # Routing and dispatch logic
 │   ├── BaseController.php  # Parent controller class
 │   ├── BaseModel.php       # Parent model class
+│   ├── Validation.php      # Data Validator
 │   └── ErrorHandler.php    # Global error and exception handling
-├── scripts/                # SQL migrations and seeders
+├── bin/                    # Command Line Interface (framework CLI)
+├── database/               # SQL migrations, seeders, and sqlite DB
 ├── public/                 # Public assets (css, js, images)
 ├── .env                    # Environment config
 ├── autoloader.php          # Custom PSR-4 autoloader

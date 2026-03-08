@@ -1342,3 +1342,47 @@ Feel free to contribute to the framework by:
 ---
 
 **Happy Coding with CodeIgniter Alternative Framework!** 🚀
+
+---
+
+## V2 Enhancements
+
+### 1. Framework CLI Tool
+The new `bin/framework` CLI acts like Artisan/Spark, making scaffolding easy:
+```bash
+# Start the local development server (with session persistence support)
+php bin/framework serve 127.0.0.1 8080
+
+# Create new controllers and models
+php bin/framework make:controller Blog
+php bin/framework make:model Blog
+
+# Generate and run migrations
+php bin/framework make:migration create_blogs_table
+php bin/framework migrate
+```
+
+### 2. Enhanced View Engine
+The view system now uses a dedicated `Engine` in `app/Core/View/Engine.php` providing:
+- **Layout Extensions**: Extend layouts using `$this->extend('layouts/default')`.
+- **Sections**: Define content blocks with `$this->section('content')` and `$this->endSection()`.
+- **Stacks**: Push scripts/styles using `$this->push('scripts')` and render them in the layout using `$this->renderStack('scripts')`.
+
+### 3. Global View Composers
+You can share data globally across all views using `app/Composers/GlobalComposer.php`.
+```php
+public function composeGlobal(array &$data): void
+{
+    // Make user authentication status available to every view automatically
+    $data['is_authenticated'] = Auth::check();
+    $data['current_user'] = Auth::user();
+}
+```
+
+### 4. Database Improvements
+The Database Wrapper (`system/Database/Database.php`) now natively supports `sqlite` alongside `mysql`.
+- Just set `DB_CONNECTION=sqlite` and `DB_NAME=database/database.sqlite` in your `.env`.
+
+### 5. Centralized Security & Session Lifecycle
+- The `ci_session` management has been centralized in `index.php` to prevent duplicate sessions or CSRF mismatches.
+- The `secure` cookie flag dynamically adapts to `localhost` environments over HTTP avoiding 403 Forbidden loops.
