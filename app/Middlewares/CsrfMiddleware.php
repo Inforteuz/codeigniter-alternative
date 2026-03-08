@@ -23,19 +23,19 @@ class CsrfMiddleware extends BaseController
      * 
      * @return bool Returns true if the CSRF token is valid or the request is GET; false otherwise.
      */
-    public function handle()
+    public function handle($request, $next)
     {
         if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-            return true;
+            return $next($request);
         }
         
-        $token = $_POST['_csrf'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+        $token = $_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
         
         if (!$this->validateCsrfToken($token)) {
             return false;
         }
         
-        return true;
+        return $next($request);
     }
     
     /**

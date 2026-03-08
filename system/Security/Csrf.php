@@ -60,7 +60,7 @@ class Csrf {
      */
     public static function generateToken(): string {
         if (session_status() === PHP_SESSION_NONE) {
-            session_start();
+
         }
 
         // Generate a 64-character (32 bytes) random token
@@ -75,7 +75,7 @@ class Csrf {
      */
     public static function verifyToken(string $token): bool {
         if (session_status() === PHP_SESSION_NONE) {
-            session_start();
+
         }
 
         if (isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token)) {
@@ -92,7 +92,7 @@ class Csrf {
      */
     public static function getToken(): ?string {
         if (session_status() === PHP_SESSION_NONE) {
-            session_start();
+
         }
 
         return $_SESSION['csrf_token'] ?? null;

@@ -45,7 +45,7 @@ class HomeController extends BaseController
     {
         // Destroy the session
         session_destroy();
-        session_start();
+
 
         // Redirect to login
         $this->to('/login');

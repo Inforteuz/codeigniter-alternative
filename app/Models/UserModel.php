@@ -2,25 +2,17 @@
 
 namespace App\Models;
 
-use System\Database\Database;
+use System\BaseModel;
 
-use PDO;
-
-/**
- * Class UserModel
- * 
- * Handles user-related database operations.
- */
-class UserModel
+class UserModel extends BaseModel
 {
-    private $db; // Database connection instance
-
-    /**
-     * Constructor initializes the Database connection.
-     */
-    public function __construct()
-    {
-        $this->db = new Database();
-    }
+    protected $table = 'users';
+    protected $primaryKey = 'id';
+    
+    // Add validation rules
+    protected $validationRules = [
+        'name' => 'required|min_length[3]',
+        'email' => 'required|valid_email',
+        'password' => 'required|min_length[6]',
+    ];
 }
-?>

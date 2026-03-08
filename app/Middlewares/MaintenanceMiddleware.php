@@ -17,7 +17,7 @@ class MaintenanceMiddleware extends BaseController
      * 
      * @return bool Returns false if maintenance mode is active and the IP is not allowed.
      */
-    public function handle()
+    public function handle($request, $next)
     {
         $maintenanceMode = env('APP_MAINTENANCE', false);
         
@@ -26,7 +26,7 @@ class MaintenanceMiddleware extends BaseController
             return false;
         }
         
-        return true;
+        return $next($request);
     }
     
     /**

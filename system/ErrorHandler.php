@@ -65,8 +65,12 @@ class ErrorHandler
         // Log error to file
         self::logError($error);
 
-        // Show production error page to user
-        self::showProductionError(500);
+        // Show error page
+        if (\System\Core\Env::get('APP_ENV') === 'development') {
+            self::showDevelopmentError($error);
+        } else {
+            self::showProductionError(500);
+        }
 
         return true;
     }
@@ -91,8 +95,12 @@ class ErrorHandler
         // Log exception
         self::logError($error);
 
-        // Show production error page
-        self::showProductionError(500);
+        // Show error page
+        if (\System\Core\Env::get('APP_ENV') === 'development') {
+            self::showDevelopmentError($error);
+        } else {
+            self::showProductionError(500);
+        }
 
         return true;
     }
@@ -117,8 +125,12 @@ class ErrorHandler
             // Log fatal error
             self::logError($errorData);
 
-            // Show production error page
-            self::showProductionError(500);
+            // Show error page
+            if (\System\Core\Env::get('APP_ENV') === 'development') {
+                self::showDevelopmentError($errorData);
+            } else {
+                self::showProductionError(500);
+            }
         }
     }
 
@@ -198,7 +210,7 @@ class ErrorHandler
             $logMessage .= "Stack trace:\n{$error['trace']}\n";
         }
         
-        $logMessage .= "==========================================\n";
+        $logMessage .= "================================================\n";
         
         file_put_contents($logFile, $logMessage, FILE_APPEND | LOCK_EX);
     }
@@ -222,6 +234,27 @@ class ErrorHandler
         
         // Show default error page
         self::renderErrorPage($code);
+        exit;
+    }
+
+    /**
+     * Show detailed error page for development
+     */
+    public static function showDevelopmentError($error)
+    {
+        http_response_code(500);
+        $errorFile = __DIR__ . "/../app/Views/errors/development.php";
+        
+        if (file_exists($errorFile)) {
+            extract(['error' => $error]);
+            include $errorFile;
+            exit;
+        }
+
+        // Fallback basic text dump
+        echo "<pre>";
+        print_r($error);
+        echo "</pre>";
         exit;
     }
 

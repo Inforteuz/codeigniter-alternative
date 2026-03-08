@@ -22,7 +22,7 @@ class LanguageMiddleware
      * 
      * @return bool Always returns true.
      */
-    public function handle()
+    public function handle($request, $next)
     {
         $supportedLanguages = ['uz', 'ru', 'en'];
         $defaultLanguage = 'uz';
@@ -43,7 +43,7 @@ class LanguageMiddleware
             define('CURRENT_LANGUAGE', $lang);
         }
         
-        return true;
+        return $next($request);
     }
     
     /**

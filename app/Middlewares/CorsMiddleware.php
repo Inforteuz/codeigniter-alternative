@@ -21,7 +21,7 @@ class CorsMiddleware
      * 
      * @return bool Returns true if request is allowed to proceed.
      */
-    public function handle()
+    public function handle($request, $next)
     {
         header('Access-Control-Allow-Origin: ' . $this->getAllowedOrigins());
         header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
@@ -34,7 +34,7 @@ class CorsMiddleware
             exit();
         }
         
-        return true;
+        return $next($request);
     }
     
     /**

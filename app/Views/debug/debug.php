@@ -241,7 +241,6 @@
             }
         }
         
-        /* Animatsiyalar */
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
@@ -250,8 +249,7 @@
         .section-content.active {
             animation: fadeIn 0.3s ease;
         }
-        
-        /* Scrollbar stilizatsiyasi */
+    
         ::-webkit-scrollbar {
             width: 8px;
             height: 8px;
@@ -495,22 +493,19 @@
             }
         }
         
-        // Avtomatik yopish/qochish funksiyasi
         document.addEventListener('DOMContentLoaded', function() {
-            // Barcha sectionlarni yopish
             const allHeaders = document.querySelectorAll('.section-header');
             allHeaders.forEach(header => {
                 if (!header.nextElementSibling.classList.contains('active')) {
                     header.click();
                 }
             });
-            
-            // Agar xatolar mavjud bo'lsa, ularni ochiq qoldirish
+        
             const errorSection = document.querySelector('.error-item');
             if (errorSection) {
                 const errorHeader = document.querySelector('.debug-section:first-child .section-header');
                 if (errorHeader) {
-                    errorHeader.click(); // Yopilgan bo'lsa ochish
+                    errorHeader.click();
                 }
             }
         });
