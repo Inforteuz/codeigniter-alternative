@@ -13,10 +13,8 @@ class GlobalComposer
     {
         $engine->share([
             'site_name'        => 'CodeIgniter Alternative',
-            'current_user'     => \App\Core\Auth\Auth::user(),
             'app_version'      => '2.0.0',
             'current_year'     => date('Y'),
-            'is_authenticated' => \App\Core\Auth\Auth::check(),
             'csrf_token'       => $_SESSION['csrf_token'] ?? '',
         ]);
     }

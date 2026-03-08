@@ -12,32 +12,15 @@
 
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
         <div class="container">
-            <a class="navbar-brand" href="/">Task Manager</a>
+            <a class="navbar-brand" href="/"><?= htmlspecialchars($site_name ?? 'Framework') ?></a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navs">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navs">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link" href="/tasks">Tasks</a>
+                        <a class="nav-link active" href="/">Home</a>
                     </li>
-                </ul>
-                <ul class="navbar-nav">
-                    <?php if (isset($is_authenticated) && $is_authenticated): ?>
-                        <li class="nav-item">
-                            <span class="nav-link text-white">Welcome, <?= htmlspecialchars($current_user['name'] ?? 'User') ?></span>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-danger" href="/logout">Logout</a>
-                        </li>
-                    <?php else: ?>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/login">Login</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/register">Register</a>
-                        </li>
-                    <?php endif; ?>
                 </ul>
             </div>
         </div>
