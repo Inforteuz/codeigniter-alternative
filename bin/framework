@@ -1,0 +1,274 @@
+#!/usr/bin/env php
+<?php
+
+/**
+ * Framework CLI Tool
+ *
+ * Provides artisan-like commands for development.
+ */
+
+require __DIR__ . '/../autoloader.php';
+// if vendor/autoload exists, load it too
+if (file_exists(__DIR__ . '/../vendor/autoload.php')) {
+    require __DIR__ . '/../vendor/autoload.php';
+}
+
+use System\Core\Env;
+use System\Database\Database;
+
+// Load environment variables
+Env::load();
+
+class CLI
+{
+    protected $args;
+    protected $command;
+
+    public function __construct(array $args)
+    {
+        $this->args = $args;
+        $this->command = $args[1] ?? 'help';
+    }
+
+    public function run()
+    {
+        switch ($this->command) {
+            case 'make:controller':
+                $this->makeController();
+                break;
+            case 'make:model':
+                $this->makeModel();
+                break;
+            case 'make:migration':
+                $this->makeMigration();
+                break;
+            case 'migrate':
+                $this->migrate();
+                break;
+            case 'serve':
+                $this->serve();
+                break;
+            case 'help':
+            default:
+                $this->showHelp();
+                break;
+        }
+    }
+
+    protected function serve()
+    {
+        $host = $this->args[2] ?? '127.0.0.1';
+        $port = $this->args[3] ?? '8080';
+        $docroot = __DIR__ . '/../';
+        
+        echo "\033[32mCodeIgniter Alternative Dev Server started on http://{$host}:{$port}\033[0m\n";
+        echo "Press Ctrl-C to quit.\n";
+        
+        passthru("php -S {$host}:{$port} -t \"{$docroot}\"");
+    }
+
+    protected function makeController()
+    {
+        $name = $this->args[2] ?? null;
+        if (!$name) {
+            echo "\033[31mError: Controller name required.\033[0m\n";
+            return;
+        }
+
+        $name = ucfirst($name);
+        if (strpos($name, 'Controller') === false) {
+            $name .= 'Controller';
+        }
+
+        $content = <<<PHP
+<?php
+
+namespace App\Controllers;
+
+use System\BaseController;
+
+class {$name} extends BaseController
+{
+    public function index()
+    {
+        return \$this->view('welcome');
+    }
+}
+PHP;
+
+        $path = __DIR__ . "/../app/Controllers/{$name}.php";
+        
+        if (file_exists($path)) {
+            echo "\033[31mError: Controller already exists.\033[0m\n";
+            return;
+        }
+
+        file_put_contents($path, $content);
+        echo "\033[32mController created successfully: {$path}\033[0m\n";
+    }
+
+    protected function makeModel()
+    {
+        $name = $this->args[2] ?? null;
+        if (!$name) {
+            echo "\033[31mError: Model name required.\033[0m\n";
+            return;
+        }
+
+        $name = ucfirst($name);
+        if (strpos($name, 'Model') === false) {
+            $name .= 'Model';
+        }
+
+        $tableName = strtolower(str_replace('Model', '', $name)) . 's';
+
+        $content = <<<PHP
+<?php
+
+namespace App\Models;
+
+use System\BaseModel;
+
+class {$name} extends BaseModel
+{
+    protected \$table = '{$tableName}';
+    protected \$primaryKey = 'id';
+    
+    // Add validation rules
+    protected \$validationRules = [];
+}
+PHP;
+
+        $path = __DIR__ . "/../app/Models/{$name}.php";
+        
+        if (file_exists($path)) {
+            echo "\033[31mError: Model already exists.\033[0m\n";
+            return;
+        }
+
+        file_put_contents($path, $content);
+        echo "\033[32mModel created successfully: {$path}\033[0m\n";
+    }
+
+    protected function makeMigration()
+    {
+        $name = $this->args[2] ?? null;
+        if (!$name) {
+            echo "\033[31mError: Migration name required.\033[0m\n";
+            return;
+        }
+
+        $timestamp = date('Y_m_d_His');
+        $className = str_replace(' ', '', ucwords(str_replace('_', ' ', $name)));
+        $fileName = "{$timestamp}_{$name}.php";
+
+        $content = <<<PHP
+<?php
+
+use App\Core\Database\Migration;
+
+class {$className} extends Migration
+{
+    public function up()
+    {
+        \$sql = "CREATE TABLE IF NOT EXISTS {{table}} (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )";
+        // \$this->execute(\$sql);
+    }
+
+    public function down()
+    {
+        // \$this->execute("DROP TABLE IF EXISTS {{table}}");
+    }
+}
+PHP;
+
+        $dir = __DIR__ . "/../database/migrations";
+        if (!is_dir($dir)) {
+            mkdir($dir, 0777, true);
+        }
+
+        $path = "{$dir}/{$fileName}";
+        file_put_contents($path, $content);
+        
+        echo "\033[32mMigration created successfully: {$path}\033[0m\n";
+    }
+
+    protected function migrate()
+    {
+        echo "\033[33mRunning Migrations...\033[0m\n";
+
+        $dbWrapper = Database::getInstance();
+        $db = $dbWrapper->getConnection();
+
+        // Ensure migrations table exists
+        $db->exec("CREATE TABLE IF NOT EXISTS migrations (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            migration VARCHAR(255) NOT NULL,
+            executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )");
+
+        // Get executed migrations
+        $stmt = $db->query("SELECT migration FROM migrations");
+        $executed = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+        $dir = __DIR__ . "/../database/migrations";
+        if (!is_dir($dir)) {
+            echo "No migrations directory found.\n";
+            return;
+        }
+
+        $files = glob("{$dir}/*.php");
+        sort($files);
+
+        $migrated = false;
+
+        foreach ($files as $file) {
+            $baseName = basename($file);
+            if (!in_array($baseName, $executed)) {
+                require_once $file;
+                
+                // Extract class name from filename: 2023_10_05_123456_create_users_table.php -> CreateUsersTable
+                $parts = explode('_', str_replace('.php', '', $baseName));
+                $className = '';
+                for ($i = 4; $i < count($parts); $i++) {
+                    $className .= ucfirst($parts[$i]);
+                }
+
+                if (class_exists($className)) {
+                    $migration = new $className();
+                    $migration->up();
+
+                    $stmt = $db->prepare("INSERT INTO migrations (migration) VALUES (?)");
+                    $stmt->execute([$baseName]);
+
+                    echo "\033[32mMigrated: {$baseName}\033[0m\n";
+                    $migrated = true;
+                }
+            }
+        }
+
+        if (!$migrated) {
+            echo "Nothing to migrate.\n";
+        }
+    }
+
+    protected function showHelp()
+    {
+        echo "\033[32mFramework CLI Tool\033[0m\n\n";
+        echo "Usage:\n";
+        echo "  php bin/framework [command] [arguments]\n\n";
+        echo "Available Commands:\n";
+        echo "  \033[33mmake:controller\033[0m <Name>      Create a new controller\n";
+        echo "  \033[33mmake:model\033[0m <Name>           Create a new model\n";
+        echo "  \033[33mmake:migration\033[0m <name>       Create a new migration file\n";
+        echo "  \033[33mmigrate\033[0m                     Run pending database migrations\n";
+        echo "  \033[33mserve\033[0m [host] [port]         Start the development server\n";
+    }
+}
+
+$cli = new CLI($argv);
+$cli->run();

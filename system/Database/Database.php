@@ -47,6 +47,9 @@ class Database
     /** @var string Character set */
     private $charset;
 
+    /** @var string Database driver (mysql | sqlite) */
+    private $driver;
+
     /**
      * Private constructor to prevent direct instantiation.
      * Loads environment variables and establishes a database connection.
@@ -55,11 +58,12 @@ class Database
     {
         Env::load();
 
-        $this->host = Env::get('DB_HOST', 'localhost');
-        $this->dbname = Env::get('DB_NAME', 'performance_schema');
-        $this->username = Env::get('DB_USER', 'root');
-        $this->password = Env::get('DB_PASS', '');
-        $this->charset = Env::get('DB_CHARSET', 'utf8mb4');
+        $this->driver   = Env::get('DB_CONNECTION', 'mysql');
+        $this->host     = Env::get('DB_HOST', 'localhost');
+        $this->dbname   = Env::get('DB_NAME', Env::get('DB_DATABASE', 'performance_schema'));
+        $this->username = Env::get('DB_USER', Env::get('DB_USERNAME', 'root'));
+        $this->password = Env::get('DB_PASS', Env::get('DB_PASSWORD', ''));
+        $this->charset  = Env::get('DB_CHARSET', 'utf8mb4');
 
         $this->connect();
     }
@@ -101,20 +105,39 @@ class Database
     private function connect()
     {
         try {
-            $dsn = "mysql:host={$this->host};dbname={$this->dbname};charset={$this->charset}";
             $options = [
-                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                PDO::ATTR_EMULATE_PREPARES => false,
+                PDO::ATTR_EMULATE_PREPARES   => false,
             ];
 
-            $this->connection = new PDO($dsn, $this->username, $this->password, $options);
-            $this->connection->exec("SET time_zone = '+05:00'");
-
+            if ($this->driver === 'sqlite') {
+                // Support both absolute path and relative-to-root path
+                $dbPath = $this->dbname;
+                if (!str_starts_with($dbPath, '/')) {
+                    $dbPath = __DIR__ . '/../../' . $dbPath;
+                }
+                $dsn = "sqlite:{$dbPath}";
+                $this->connection = new PDO($dsn, null, null, $options);
+            } else {
+                $dsn = "mysql:host={$this->host};dbname={$this->dbname};charset={$this->charset}";
+                $this->connection = new PDO($dsn, $this->username, $this->password, $options);
+                $this->connection->exec("SET time_zone = '+05:00'");
+            }
         } catch (PDOException $e) {
             $this->logError("Database connection failed: " . $e->getMessage());
             throw new \Exception("Database connection error occurred. Please contact the administrator.");
         }
+    }
+
+    /**
+     * Get the raw PDO connection (used by Migration CLI, etc.)
+     *
+     * @return \PDO
+     */
+    public function getConnection(): \PDO
+    {
+        return $this->connection;
     }
 
     /**
@@ -139,19 +162,6 @@ class Database
         file_put_contents($logFile, $logMessage, FILE_APPEND);
     }
 
-    /**
-     * Get the PDO connection object.
-     * Connect if not already connected.
-     * 
-     * @return PDO
-     */
-    public function getConnection()
-    {
-        if ($this->connection === null) {
-            $this->connect();
-        }
-        return $this->connection;
-    }
 
     /**
      * Prepare a SQL statement.
