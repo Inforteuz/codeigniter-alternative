@@ -339,7 +339,7 @@ Request Method: <?= htmlspecialchars($_SERVER['REQUEST_METHOD'] ?? 'Unknown') ?>
 Content Type: <?= htmlspecialchars($_SERVER['CONTENT_TYPE'] ?? 'Not specified') ?>
 Content Length: <?= htmlspecialchars($_SERVER['CONTENT_LENGTH'] ?? 'Not specified') ?>
 PHP Version: <?= PHP_VERSION ?>
-Framework: CodeIgniter Alternative v2.0.0</pre>
+Framework: CodeIgniter Alternative v3.0.0</pre>
             </details>
             <?php endif; ?>
         </div>
@@ -378,4 +378,5 @@ Framework: CodeIgniter Alternative v2.0.0</pre>
         });
     </script>
 </body>
+
 </html>
