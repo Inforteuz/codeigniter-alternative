@@ -6,7 +6,7 @@
  * =========================================================
  * 
  * Developer: Oyatillo
- * Framework Version: 1.0.0
+ * Framework Version: 3.0.0
  * Framework Name: CodeIgniter Alternative
  * 
  * This file serves as the entry point of the framework.
@@ -27,9 +27,6 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 require_once 'autoloader.php';
-if (Env::get('APP_ENV') !== 'production') {
-    require_once 'app/Controllers/MigrateController.php';
-}
 
 use System\Core\Env;
 use System\Core\Debug;
@@ -38,6 +35,10 @@ use System\Router;
 use System\ErrorHandler;
 
 Env::load();
+
+if (Env::get('APP_ENV') !== 'production') {
+    require_once 'app/Controllers/MigrateController.php';
+}
 
 // --- PREPARE SESSION ---
 if (session_status() === PHP_SESSION_NONE) {
@@ -69,8 +70,6 @@ ErrorHandler::register();
 if (Env::get('APP_DEBUG') === 'true') {
     Debug::init();
 }
-
-// Migrations should be run via CLI: php bin/framework migrate
 
 $router = new Router();
 $router->handleRequest();
