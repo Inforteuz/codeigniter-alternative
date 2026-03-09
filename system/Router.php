@@ -14,6 +14,8 @@ namespace System;
 
 use System\Core\Env;
 use System\Core\DebugToolbar;
+use System\Http\Request;
+use System\Error\ErrorRenderer;
 use App\Core\Container;
 use App\Core\Middleware\Pipeline;
 
@@ -109,8 +111,9 @@ class Router
      */
     public function handleRequest()
     {
-        $method = $_SERVER['REQUEST_METHOD'];
-        $url = $_SERVER["REQUEST_URI"];
+        $request = Request::fromGlobals();
+        $method = $request->method();
+        $url = $request->uri();
 
         $url = $this->normalizeRequestUri($url);
 
@@ -126,10 +129,16 @@ class Router
             return;
         }
 
+        // Global CORS preflight handling (even when no route/middleware matches)
+        if ($method === 'OPTIONS') {
+            $this->handlePreflight($request, $url);
+            return;
+        }
+
         $matchedRoute = $this->matchRoute($method, $url);
 
         if ($matchedRoute) {
-            if (!$this->executeMiddlewares($matchedRoute['middlewares'])) {
+            if (!$this->executeMiddlewares($matchedRoute['middlewares'], $request)) {
                 return;
             }
 
@@ -149,7 +158,75 @@ class Router
             return;
         }
 
+        // If the path exists for other HTTP methods, return 405 instead of falling back
+        $allowed = $this->findAllowedMethods($url);
+        if (!empty($allowed)) {
+            header('Allow: ' . implode(', ', $allowed));
+            $this->showError(405, 'Method Not Allowed');
+            return;
+        }
+
         $this->handleDynamicRoute($url);
+    }
+
+    /**
+     * Handle OPTIONS preflight requests.
+     */
+    protected function handlePreflight(Request $request, string $url): void
+    {
+        $allowed = $this->findAllowedMethods($url);
+        if (empty($allowed)) {
+            // If no explicit route matches, still allow common methods to reduce friction for APIs
+            $allowed = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'];
+        } else {
+            if (!in_array('OPTIONS', $allowed, true)) {
+                $allowed[] = 'OPTIONS';
+            }
+        }
+
+        $origin = (string) ($request->header('Origin', $_SERVER['HTTP_ORIGIN'] ?? '') ?: '');
+        $allowOrigin = $this->resolveCorsOrigin($origin);
+        if ($allowOrigin !== '') {
+            header('Access-Control-Allow-Origin: ' . $allowOrigin);
+            header('Vary: Origin');
+            header('Access-Control-Allow-Credentials: true');
+        }
+
+        header('Access-Control-Allow-Methods: ' . implode(', ', $allowed));
+        header('Access-Control-Allow-Headers: ' . $this->resolveCorsAllowHeaders($request));
+        header('Access-Control-Max-Age: 600');
+        http_response_code(204);
+        exit();
+    }
+
+    protected function resolveCorsOrigin(string $origin): string
+    {
+        $defaultAllowed = [
+            'http://localhost:3000',
+            'http://127.0.0.1:3000',
+            'https://yourdomain.com',
+        ];
+
+        $env = Env::get('CORS_ALLOWED_ORIGINS', '');
+        $allowed = $defaultAllowed;
+        if (is_string($env) && trim($env) !== '') {
+            $allowed = array_values(array_filter(array_map('trim', explode(',', $env))));
+        }
+
+        if ($origin !== '' && in_array($origin, $allowed, true)) {
+            return $origin;
+        }
+
+        return $allowed[0] ?? '';
+    }
+
+    protected function resolveCorsAllowHeaders(Request $request): string
+    {
+        $requested = (string) ($request->header('Access-Control-Request-Headers', '') ?: '');
+        if ($requested !== '') {
+            return $requested;
+        }
+        return 'Content-Type, Authorization, X-Requested-With';
     }
 
     /**
@@ -316,10 +393,49 @@ class Router
     }
 
     /**
+     * Find which HTTP methods match a given URL pattern.
+     * Used to return 405 Method Not Allowed.
+     *
+     * @param string $url Normalized URL without leading slash
+     * @return string[]
+     */
+    protected function findAllowedMethods(string $url): array
+    {
+        $normalizedUrl = str_replace('-', '_', $url);
+        $allowed = [];
+
+        foreach ($this->routes as $method => $routes) {
+            foreach ($routes as $pattern => $_route) {
+                $normalizedPattern = str_replace('-', '_', $pattern);
+
+                if ($normalizedPattern === $normalizedUrl) {
+                    $allowed[] = $method;
+                    continue;
+                }
+
+                $patternRegex = preg_replace_callback('/\{([a-zA-Z0-9_\-]+)(?::([^}]+))?\}/', function ($matches) {
+                    $name = $matches[1];
+                    $regex = $matches[2] ?? '[^/]+';
+                    return "(?P<{$name}>{$regex})";
+                }, $normalizedPattern);
+                $patternRegex = "#^{$patternRegex}$#";
+
+                if (preg_match($patternRegex, $normalizedUrl)) {
+                    $allowed[] = $method;
+                }
+            }
+        }
+
+        $allowed = array_values(array_unique($allowed));
+        sort($allowed);
+        return $allowed;
+    }
+
+    /**
      * Execute middlewares via Pipeline before dispatching controller.
      * Each middleware must implement handle($request, $next)
      */
-    protected function executeMiddlewares($middlewares)
+    protected function executeMiddlewares($middlewares, $request = true)
     {
         if (empty($middlewares)) {
             return true;
@@ -338,7 +454,7 @@ class Router
         $result = true;
         try {
             $result = (new Pipeline())
-                ->send(true)            // pass a simple truthy payload
+                ->send($request)
                 ->through($pipes)
                 ->then(fn($req) => $req); // destination: just return the payload
         } catch (\Exception $e) {
@@ -436,397 +552,12 @@ class Router
 
     private function showError($code, $message)
     {
-        http_response_code($code);
-
-        $errorFile = __DIR__ . "/../app/Views/errors/{$code}.php";
-
-        if (file_exists($errorFile)) {
-            include($errorFile);
-            $this->logError("{$code} {$message}");
-            return;
-        }
-
         $this->logError("{$code} {$message}");
-
-        $errorConfig = $this->getErrorConfig($code);
-
-        ?>
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <meta http-equiv="X-UA-Compatible" content="ie=edge">
-            <meta name="generator" content="CodeIgniter Alternative">
-            <meta name="description" content="<?= $code ?> - <?= $errorConfig['title'] ?> - CodeIgniter Alternative Framework">
-            <link rel="icon" href="favicon.ico" type="image/png">
-            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-            <title><?= $code ?> - <?= $errorConfig['title'] ?> | CodeIgniter Alternative</title>
-            <style>
-                :root {
-                    --ci-primary: #dd4814;
-                    --ci-primary-dark: #bf3c10;
-                    --ci-light: #f8f9fa;
-                    --ci-dark: #212529;
-                    --ci-border: #dee2e6;
-                    --ci-bg: #ffffff;
-                    --ci-text: #212529;
-                    --ci-text-muted: #6c757d;
-                    --error-color: <?= $errorConfig['color'] ?>;
-                    --error-color-dark: <?= $errorConfig['colorDark'] ?>;
-                }
-
-                * {
-                    margin: 0;
-                    padding: 0;
-                    box-sizing: border-box;
-                }
-
-                body {
-                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-                    background: linear-gradient(135deg, var(--ci-light) 0%, var(--ci-bg) 100%);
-                    color: var(--ci-text);
-                    line-height: 1.6;
-                    min-height: 100vh;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    padding: 20px;
-                }
-
-                .error-container {
-                    max-width: 500px;
-                    width: 100%;
-                    text-align: center;
-                    animation: fadeInUp 0.8s ease-out;
-                }
-
-                .error-content {
-                    background: var(--ci-bg);
-                    padding: 50px 30px;
-                    border-radius: 16px;
-                    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
-                    border: 1px solid var(--ci-border);
-                }
-
-                .error-code {
-                    font-size: 6rem;
-                    font-weight: 800;
-                    color: var(--error-color);
-                    line-height: 1;
-                    margin-bottom: 20px;
-                    text-shadow: 4px 4px 0px rgba(0, 0, 0, 0.1);
-                    animation: pulse 2s infinite;
-                }
-
-                .error-title {
-                    font-size: 1.75rem;
-                    font-weight: 700;
-                    color: var(--ci-dark);
-                    margin-bottom: 16px;
-                }
-
-                .error-message {
-                    font-size: 1.125rem;
-                    color: var(--ci-text-muted);
-                    margin-bottom: 30px;
-                    line-height: 1.6;
-                }
-
-                .error-icon {
-                    font-size: 4rem;
-                    color: var(--error-color);
-                    margin-bottom: 20px;
-                    animation: bounce 2s infinite;
-                }
-
-                .error-actions {
-                    display: flex;
-                    gap: 12px;
-                    justify-content: center;
-                    flex-wrap: wrap;
-                }
-
-                .btn {
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 8px;
-                    padding: 12px 24px;
-                    border-radius: 8px;
-                    text-decoration: none;
-                    font-weight: 600;
-                    font-size: 0.95rem;
-                    transition: all 0.3s ease;
-                    border: 2px solid transparent;
-                }
-
-                .btn-primary {
-                    background: var(--error-color);
-                    color: white;
-                    border-color: var(--error-color);
-                }
-
-                .btn-primary:hover {
-                    background: var(--error-color-dark);
-                    border-color: var(--error-color-dark);
-                    transform: translateY(-2px);
-                    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
-                }
-
-                .btn-secondary {
-                    background: transparent;
-                    color: var(--ci-text);
-                    border-color: var(--ci-border);
-                }
-
-                .btn-secondary:hover {
-                    background: var(--ci-light);
-                    border-color: var(--error-color);
-                    transform: translateY(-2px);
-                }
-
-                .footer {
-                    text-align: center;
-                    color: var(--ci-text-muted);
-                    margin-top: 30px;
-                    font-size: 0.85rem;
-                }
-
-                .footer a {
-                    color: var(--error-color);
-                    text-decoration: none;
-                    font-weight: 500;
-                }
-
-                .footer a:hover {
-                    text-decoration: underline;
-                }
-
-                @keyframes fadeInUp {
-                    from {
-                        opacity: 0;
-                        transform: translateY(30px);
-                    }
-                    to {
-                        opacity: 1;
-                        transform: translateY(0);
-                    }
-                }
-
-                @keyframes bounce {
-                    0%, 20%, 50%, 80%, 100% {
-                        transform: translateY(0);
-                    }
-                    40% {
-                        transform: translateY(-10px);
-                    }
-                    60% {
-                        transform: translateY(-5px);
-                    }
-                }
-
-                @keyframes pulse {
-                    0% {
-                        transform: scale(1);
-                    }
-                    50% {
-                        transform: scale(1.05);
-                    }
-                    100% {
-                        transform: scale(1);
-                    }
-                }
-
-                @media (max-width: 768px) {
-                    .error-content {
-                        padding: 40px 24px;
-                    }
-
-                    .error-code {
-                        font-size: 5rem;
-                    }
-
-                    .error-title {
-                        font-size: 1.5rem;
-                    }
-
-                    .error-message {
-                        font-size: 1rem;
-                    }
-
-                    .error-icon {
-                        font-size: 3.5rem;
-                    }
-
-                    .error-actions {
-                        flex-direction: column;
-                        align-items: center;
-                    }
-
-                    .btn {
-                        width: 100%;
-                        max-width: 250px;
-                        justify-content: center;
-                    }
-                }
-
-                @media (max-width: 480px) {
-                    .error-code {
-                        font-size: 4rem;
-                    }
-
-                    .error-title {
-                        font-size: 1.25rem;
-                    }
-
-                    body {
-                        padding: 16px;
-                    }
-                }
-            </style>
-        </head>
-        <body>
-            <div class="error-container">
-                <div class="error-content">
-                    <div class="error-icon">
-                        <i class="fas <?= $errorConfig['icon'] ?>"></i>
-                    </div>
-                    <div class="error-code"><?= $code ?></div>
-                    <h1 class="error-title"><?= $errorConfig['title'] ?></h1>
-                    <p class="error-message"><?= $errorConfig['message'] ?></p>
-
-                    <div class="error-actions">
-                        <a href="/" class="btn btn-primary">
-                            <i class="fas fa-home"></i> Go Home
-                        </a>
-                        <a href="javascript:history.back()" class="btn btn-secondary">
-                            <i class="fas fa-arrow-left"></i> Go Back
-                        </a>
-                        <?php if ($code >= 500): ?>
-                        <a href="javascript:location.reload()" class="btn btn-secondary">
-                            <i class="fas fa-redo"></i> Try Again
-                        </a>
-                        <?php endif; ?>
-                    </div>
-                </div>
-
-                <div class="footer">
-                    <p>&copy; <?= date("Y") ?> CodeIgniter Alternative Framework - v2.0.0</p>
-                    <p>PHP <?= PHP_VERSION ?> | Server: <?= $_SERVER['SERVER_SOFTWARE'] ?? 'Unknown' ?></p>
-                </div>
-            </div>
-
-            <script>
-                document.addEventListener('DOMContentLoaded', function() {
-                    const errorCode = document.querySelector('.error-code');
-
-                    errorCode.addEventListener('click', function() {
-                        this.style.animation = 'none';
-                        setTimeout(() => {
-                            this.style.animation = 'pulse 2s infinite';
-                        }, 10);
-                    });
-
-                    document.addEventListener('keydown', function(e) {
-                        if (e.key === 'Escape') {
-                            window.history.back();
-                        } else if (e.key === 'Home' || e.key === 'h') {
-                            window.location.href = '/';
-                        }
-                        <?php if ($code >= 500): ?>
-                        else if (e.key === 'r' || e.key === 'F5') {
-                            location.reload();
-                        }
-                        <?php endif; ?>
-                    });
-
-                    console.log('%c<?= $errorConfig['consoleIcon'] ?> <?= $code ?> - <?= $errorConfig['title'] ?>', 'color: <?= $errorConfig['color'] ?>; font-size: 16px; font-weight: bold;');
-                    console.log('%c<?= $errorConfig['consoleMessage'] ?>', 'color: #6c757d;');
-                });
-            </script>
-        </body>
-        </html>
-        <?php
+        (new ErrorRenderer())->render((int) $code, (string) $message);
+        return;
     }
 
-    private function getErrorConfig($code)
-    {
-        $configs = [
-            400 => [
-                'title' => 'Bad Request',
-                'message' => 'The server cannot process the request due to a client error. Please check your request and try again.',
-                'icon' => 'fa-exclamation-triangle',
-                'color' => '#ffc107',
-                'colorDark' => '#e0a800',
-                'consoleIcon' => '\u26A0',
-                'consoleMessage' => 'The server could not understand the request due to invalid syntax.'
-            ],
-            401 => [
-                'title' => 'Unauthorized',
-                'message' => 'Authentication is required to access this resource. Please log in and try again.',
-                'icon' => 'fa-user-lock',
-                'color' => '#ff6b35',
-                'colorDark' => '#e55a2b',
-                'consoleIcon' => '\uD83D\uDD12',
-                'consoleMessage' => 'Authentication required for this resource.'
-            ],
-            403 => [
-                'title' => 'Forbidden',
-                'message' => 'You do not have permission to access this resource. Please contact the administrator if you believe this is an error.',
-                'icon' => 'fa-ban',
-                'color' => '#dc3545',
-                'colorDark' => '#c82333',
-                'consoleIcon' => '\uD83D\uDEAB',
-                'consoleMessage' => 'Access to this resource is forbidden.'
-            ],
-            404 => [
-                'title' => 'Page Not Found',
-                'message' => 'The page you\'re looking for doesn\'t exist or has been moved. Please check the URL or navigate back to the homepage.',
-                'icon' => 'fa-search',
-                'color' => '#6c757d',
-                'colorDark' => '#545b62',
-                'consoleIcon' => '\uD83D\uDD0D',
-                'consoleMessage' => 'The requested URL was not found on this server.'
-            ],
-            405 => [
-                'title' => 'Method Not Allowed',
-                'message' => 'The request method is not supported for this resource. Please check the HTTP method and try again.',
-                'icon' => 'fa-times-circle',
-                'color' => '#fd7e14',
-                'colorDark' => '#e56a00',
-                'consoleIcon' => '\u274C',
-                'consoleMessage' => 'The request method is not allowed for this resource.'
-            ],
-            500 => [
-                'title' => 'Internal Server Error',
-                'message' => 'The server encountered an unexpected condition. Our technical team has been notified and is working to resolve the issue.',
-                'icon' => 'fa-server',
-                'color' => '#dc3545',
-                'colorDark' => '#c82333',
-                'consoleIcon' => '\uD83D\uDD04',
-                'consoleMessage' => 'The server encountered an unexpected condition.'
-            ],
-            503 => [
-                'title' => 'Service Unavailable',
-                'message' => 'The server is currently unable to handle the request due to maintenance or capacity problems. Please try again later.',
-                'icon' => 'fa-tools',
-                'color' => '#17a2b8',
-                'colorDark' => '#138496',
-                'consoleIcon' => '\uD83D\uDD27',
-                'consoleMessage' => 'The server is temporarily unavailable.'
-            ]
-        ];
-
-        return $configs[$code] ?? [
-            'title' => 'Server Error',
-            'message' => 'An unexpected error occurred. Please try again later or contact support if the problem persists.',
-            'icon' => 'fa-exclamation-circle',
-            'color' => '#6c757d',
-            'colorDark' => '#545b62',
-            'consoleIcon' => '\u2757',
-            'consoleMessage' => 'An unexpected server error occurred.'
-        ];
-    }
+    // Error page rendering moved to System\Error\ErrorRenderer
 
     protected function handleDynamicRoute($url)
     {

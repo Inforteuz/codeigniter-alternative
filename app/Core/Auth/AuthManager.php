@@ -18,7 +18,7 @@ class AuthManager
         }
 
         $userModel = new UserModel();
-        $user = $userModel->where('email', $email)->first();
+        $user = $userModel->where(['email' => $email])->first();
 
         if ($user && password_verify($password, $user['password'])) {
             $this->login($user);
@@ -30,6 +30,11 @@ class AuthManager
 
     public function login($user)
     {
+        // Prevent session fixation
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_regenerate_id(true);
+        }
+
         // Set session
         $_SESSION['logged_in'] = true;
         $_SESSION['user_id'] = $user['id'];

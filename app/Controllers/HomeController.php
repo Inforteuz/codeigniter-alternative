@@ -9,6 +9,7 @@
 namespace App\Controllers;
 
 use System\BaseController;
+use App\Core\Auth\Auth;
 
 class HomeController extends BaseController
 {
@@ -43,11 +44,8 @@ class HomeController extends BaseController
      */
     public function logout()
     {
-        // Destroy the session
-        session_destroy();
-
-
-        // Redirect to login
+        // Logout via Auth manager (clears session keys + regenerates session id)
+        Auth::logout();
         $this->to('/login');
     }
 }

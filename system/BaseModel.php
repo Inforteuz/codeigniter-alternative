@@ -51,6 +51,8 @@ class BaseModel
     // Enhanced features
     protected $useSoftDeletes = false;
     protected $deletedField = 'deleted_at';
+    protected $withDeleted = false;
+    protected $onlyDeleted = false;
     protected $useTimestamps = false;
     protected $createdField = 'created_at';
     protected $updatedField = 'updated_at';
@@ -78,6 +80,13 @@ class BaseModel
     // Fillable fields (mass assignment protection)
     protected $fillable = [];
     protected $guarded = ['*'];
+
+    /**
+     * Whitelist columns allowed for global search().
+     * Child models can override: protected $searchable = ['name','email'];
+     * @var string[]
+     */
+    protected $searchable = [];
     
     // Relationships cache
     protected $relationships = [];
@@ -1014,6 +1023,8 @@ class BaseModel
      */
     public function withDeleted()
     {
+        $this->withDeleted = true;
+        $this->onlyDeleted = false;
         return $this;
     }
 
@@ -1023,9 +1034,8 @@ class BaseModel
      */
     public function onlyDeleted()
     {
-        if ($this->useSoftDeletes) {
-            $this->whereNotNull($this->deletedField);
-        }
+        $this->onlyDeleted = true;
+        $this->withDeleted = true;
         return $this;
     }
 
@@ -1053,15 +1063,38 @@ class BaseModel
      */
     public function search($term, $fields = [])
     {
-        if (empty($fields) || empty($term)) {
+        $term = (string) $term;
+        if ($term === '') {
+            return $this;
+        }
+
+        if (empty($fields)) {
+            $fields = $this->searchable;
+        }
+
+        if (empty($fields)) {
+            return $this;
+        }
+
+        $fields = array_values(array_filter(array_map('strval', (array) $fields)));
+
+        if (!empty($this->searchable)) {
+            $fields = array_values(array_intersect($fields, $this->searchable));
+        }
+
+        if (empty($fields)) {
             return $this;
         }
 
         $conditions = [];
-        $escapedTerm = addslashes($term);
-        
-        foreach ($fields as $field) {
-            $conditions[] = "{$field} LIKE '%{$escapedTerm}%'";
+        $params = [];
+        $baseIndex = is_array($this->lastParams) ? count($this->lastParams) : 0;
+
+        foreach ($fields as $i => $field) {
+            $this->assertSafeColumnName($field, 'search field');
+            $param = "__search_{$baseIndex}_{$i}";
+            $conditions[] = "{$field} LIKE :{$param}";
+            $params[$param] = '%' . $term . '%';
         }
 
         $searchCondition = '(' . implode(' OR ', $conditions) . ')';
@@ -1072,6 +1105,7 @@ class BaseModel
             $this->lastWhere = "WHERE " . $searchCondition;
         }
 
+        $this->lastParams = array_merge($this->lastParams, $params);
         return $this;
     }
 
@@ -1440,19 +1474,28 @@ class BaseModel
      */
     public function increment($column, $amount = 1, $extra = [])
     {
-        $data = array_merge($extra, [$column => new \PDOStatement("({$column} + {$amount})")]);
-        
-        $sql = "UPDATE {$this->table} SET {$column} = {$column} + {$amount}";
-        
+        $this->assertSafeColumnName((string) $column, 'increment column');
+        $amount = (int) $amount;
+
+        if (trim((string) $this->lastWhere) === '') {
+            throw new \LogicException('increment() requires a where() condition to avoid mass-updates.');
+        }
+
+        $sql = "UPDATE {$this->table} SET {$column} = {$column} + :__inc_amount";
+        $params = array_merge($this->lastParams, ['__inc_amount' => $amount]);
+
         if (!empty($extra)) {
             foreach ($extra as $key => $value) {
-                $sql .= ", {$key} = :{$key}";
+                $key = (string) $key;
+                $this->assertSafeColumnName($key, 'increment extra column');
+                $sql .= ", {$key} = :__inc_extra_{$key}";
+                $params["__inc_extra_{$key}"] = $value;
             }
         }
-        
+
         $sql .= " " . $this->lastWhere;
-        
-        return $this->executeQuery($sql, array_merge($this->lastParams, $extra));
+
+        return $this->executeQuery($sql, $params);
     }
 
     /**
@@ -1518,7 +1561,7 @@ class BaseModel
     {
         $sql = "SELECT {$this->lastSelect} FROM {$this->table}";
         $sql .= $this->lastJoin;
-        $sql .= " " . $this->lastWhere;
+        $sql .= " " . $this->applySoftDeleteFilter($this->lastWhere);
         $sql .= " " . $this->lastGroupBy;
         $sql .= " " . $this->lastHaving;
         $sql .= " " . $this->lastOrder;
@@ -1541,6 +1584,46 @@ class BaseModel
         $this->lastJoin = '';
         $this->lastGroupBy = '';
         $this->lastHaving = '';
+        $this->withDeleted = false;
+        $this->onlyDeleted = false;
+    }
+
+    /**
+     * Apply soft delete filters to the current WHERE clause.
+     */
+    protected function applySoftDeleteFilter(string $whereSql): string
+    {
+        if (!$this->useSoftDeletes) {
+            return $whereSql;
+        }
+
+        $condition = null;
+        if ($this->onlyDeleted) {
+            $condition = "{$this->deletedField} IS NOT NULL";
+        } elseif (!$this->withDeleted) {
+            $condition = "{$this->deletedField} IS NULL";
+        }
+
+        if ($condition === null) {
+            return $whereSql;
+        }
+
+        if (trim($whereSql) === '') {
+            return "WHERE {$condition}";
+        }
+
+        return $whereSql . " AND {$condition}";
+    }
+
+    /**
+     * Very small safety check to prevent SQL injection via column names.
+     */
+    protected function assertSafeColumnName(string $column, string $context = 'column'): void
+    {
+        $column = trim($column);
+        if ($column === '' || !preg_match('/^[a-zA-Z0-9_\\.]+$/', $column)) {
+            throw new \InvalidArgumentException("Unsafe {$context} name: {$column}");
+        }
     }
 
     /**

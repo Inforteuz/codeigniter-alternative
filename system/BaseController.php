@@ -35,6 +35,9 @@ use System\Core\Debug;
 use System\Core\DebugToolbar;
 use System\Cache\Cache;
 use System\Cache\CacheHelper;
+use System\Http\Request as HttpRequest;
+use System\Http\Response as HttpResponse;
+use System\Error\ErrorRenderer;
 use App\Core\Container;
 use App\Core\View\Engine as ViewEngine;
 
@@ -46,6 +49,13 @@ class BaseController
     protected $helpers = [];
     protected $request = [];
     protected $validationErrors = [];
+    protected array $settings = [];
+
+    /**
+     * Typed HTTP request/response objects (backward-compatible with $this->request array).
+     */
+    protected ?HttpRequest $httpRequest = null;
+    protected ?HttpResponse $httpResponse = null;
 
     // View system properties
     protected $layout = 'default';
@@ -107,16 +117,29 @@ class BaseController
      */
     private function initializeRequest()
     {
+        $this->httpRequest = HttpRequest::fromGlobals();
+        $this->httpResponse = new HttpResponse();
+
         $this->request = [
-            'method' => $_SERVER['REQUEST_METHOD'] ?? 'GET',
-            'uri' => $_SERVER['REQUEST_URI'] ?? '',
-            'get' => $_GET,
-            'post' => $_POST,
-            'files' => $_FILES,
-            'headers' => getallheaders() ?: [],
-            'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? '',
-            'ip_address' => $this->getClientIpAddress()
+            'method' => $this->httpRequest->method(),
+            'uri' => $this->httpRequest->uri(),
+            'get' => $this->httpRequest->query(),
+            'post' => $this->httpRequest->post(),
+            'files' => $this->httpRequest->files(),
+            'headers' => $this->httpRequest->headers(),
+            'user_agent' => $this->httpRequest->userAgent(),
+            'ip_address' => $this->httpRequest->ip(),
         ];
+    }
+
+    public function request(): ?HttpRequest
+    {
+        return $this->httpRequest;
+    }
+
+    public function response(): ?HttpResponse
+    {
+        return $this->httpResponse;
     }
 
     /**
@@ -1621,7 +1644,7 @@ class BaseController
 
     public function filterMessage($message)
     {
-        $pattern = '/[\"<>\/*\&\%\$\#$$$$\[\]\{\}]/';
+        $pattern = '/["<>\/\*&%$#\[\]\{\}]/';
         $cleanedMessage = preg_replace($pattern, '', $message);
         $cleanedMessage = str_replace(["'", '`'], "'", $cleanedMessage);
         if ($cleanedMessage !== $message) {
@@ -1704,114 +1727,8 @@ class BaseController
 
     private function showError($code, $message)
     {
-        http_response_code($code);
-        $errorFile = __DIR__ . "/../app/Views/errors/{$code}.php";
-        if (file_exists($errorFile)) {
-            include($errorFile);
-            $this->logError("{$code} {$message}");
-            return;
-        }
         $this->logError("{$code} {$message}");
-        echo "
-        <!DOCTYPE html>
-        <html lang='en'>
-        <head>
-            <meta charset='UTF-8'>
-            <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-            <link rel='icon' href='favicon.ico' type='image/png'>
-            <title>{$code} - Error</title>
-            <link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css  '>
-            <style>
-                * {
-                    margin: 0;
-                    padding: 0;
-                    box-sizing: border-box;
-                }
-                body {
-                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                    background-color: #f5f5f5;
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                    height: 100vh;
-                    margin: 0;
-                    color: #333;
-                }
-                .error-container {
-                    background-color: #fff;
-                    padding: 30px 20px;
-                    border-radius: 8px;
-                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-                    text-align: center;
-                    max-width: 420px;
-                    width: 100%;
-                }
-                .error-container h1 {
-                    font-size: 60px;
-                    color: #e74c3c;
-                    margin-bottom: 10px;
-                }
-                .error-container h2 {
-                    font-size: 20px;
-                    color: #555;
-                    margin-bottom: 15px;
-                }
-                .error-container p {
-                    font-size: 14px;
-                    color: #777;
-                    margin-bottom: 20px;
-                }
-                .error-container .button {
-                    text-decoration: none;
-                    background-color: #3498db;
-                    color: #fff;
-                    font-size: 14px;
-                    padding: 8px 18px;
-                    border-radius: 5px;
-                    display: inline-block;
-                    transition: background-color 0.3s ease;
-                }
-                .error-container .button:hover {
-                    background-color: #2980b9;
-                }
-                .error-container .icon {
-                    font-size: 60px;
-                    color: #e74c3c;
-                    margin-bottom: 15px;
-                }
-                @media (max-width: 600px) {
-                    .error-container h1 {
-                        font-size: 50px;
-                    }
-                    .error-container h2 {
-                        font-size: 18px;
-                    }
-                    .error-container p {
-                        font-size: 12px;
-                    }
-                    .error-container .button {
-                        padding: 6px 12px;
-                        font-size: 12px;
-                    }
-                    .error-container .icon {
-                        font-size: 50px;
-                    }
-                }
-            </style>
-        </head>
-        <body>
-            <div class='error-container'>
-                <div class='icon'>
-                    <i class='fas fa-exclamation-triangle'></i>
-                </div>
-                <h1>{$code}</h1>
-                <h2>{$message}</h2>
-                <p>This page does not exist or the request was made incorrectly.</p>
-                <a href='/' class='button'>Return to home page</a>
-            </div>
-        </body>
-        </html>
-        ";
+        (new ErrorRenderer())->render((int) $code, (string) $message);
     }
 
    public function dd($data, $stop = true)
@@ -2012,6 +1929,11 @@ class BaseController
     protected function isHtmlMinifyEnabled()
     {
         return filter_var(Env::get('MINIFY_HTML', 'false'), FILTER_VALIDATE_BOOLEAN);
+    }
+
+    protected function getViewCacheTtl(): int
+    {
+        return (int) Env::get('VIEW_CACHE_TTL', 3600);
     }
 
     protected function validateRequired($fields, $data)

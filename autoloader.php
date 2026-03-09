@@ -23,6 +23,13 @@ if (version_compare(PHP_VERSION, '8.1.9', '<')) {
     exit();
 }
 
+// Prefer Composer autoload (PSR-4). Falls back to legacy autoloader if missing.
+$composerAutoload = __DIR__ . '/vendor/autoload.php';
+if (file_exists($composerAutoload)) {
+    require_once $composerAutoload;
+    return;
+}
+
 /*
 |--------------------------------------------------------------------------
 | Autoload function

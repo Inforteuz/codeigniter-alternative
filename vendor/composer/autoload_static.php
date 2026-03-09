@@ -16,6 +16,14 @@ class ComposerStaticInit657ac079313fab046eb8c29fe1d6992b
         array (
             'ZipStream\\' => 10,
         ),
+        'T' => 
+        array (
+            'Tests\\' => 6,
+        ),
+        'S' => 
+        array (
+            'System\\' => 7,
+        ),
         'P' => 
         array (
             'Psr\\SimpleCache\\' => 16,
@@ -36,12 +44,24 @@ class ComposerStaticInit657ac079313fab046eb8c29fe1d6992b
         array (
             'Complex\\' => 8,
         ),
+        'A' => 
+        array (
+            'App\\' => 4,
+        ),
     );
 
     public static $prefixDirsPsr4 = array (
         'ZipStream\\' => 
         array (
             0 => __DIR__ . '/..' . '/maennchen/zipstream-php/src',
+        ),
+        'Tests\\' => 
+        array (
+            0 => __DIR__ . '/../..' . '/tests',
+        ),
+        'System\\' => 
+        array (
+            0 => __DIR__ . '/../..' . '/system',
         ),
         'Psr\\SimpleCache\\' => 
         array (
@@ -75,6 +95,10 @@ class ComposerStaticInit657ac079313fab046eb8c29fe1d6992b
         'Complex\\' => 
         array (
             0 => __DIR__ . '/..' . '/markbaker/complex/classes/src',
+        ),
+        'App\\' => 
+        array (
+            0 => __DIR__ . '/../..' . '/app',
         ),
     );
 

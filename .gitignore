@@ -1,9 +1,26 @@
 # Environment
-.env
+/.env
 
-# IDE configs
+# Dependencies / build artifacts
+/vendor/
+/.phpunit.result.cache
+/build/
+
+# Writable runtime folders
+/writable/cache/*
+/writable/logs/*
+/writable/session/*
+/writable/uploads/*
+
+# Keep placeholder/index files committed
+!/writable/cache/index.html
+!/writable/cache/.htaccess
+!/writable/logs/index.html
+!/writable/index.html
+!/writable/uploads/index.html
+
+# IDE / OS noise
+.vscode/
 .idea/
-
-# OS-specific
 .DS_Store
 Thumbs.db
