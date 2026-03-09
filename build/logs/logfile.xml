@@ -1,25 +1,30 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <testsuites>
-  <testsuite name="/Users/apple/Desktop/CodeIgniter Alternative/php-custom-framework/phpunit.xml.dist" tests="11" assertions="14" errors="0" failures="0" skipped="0" time="0.008023">
-    <testsuite name="App" tests="11" assertions="14" errors="0" failures="0" skipped="0" time="0.008023">
-      <testsuite name="Tests\Core\ContainerTest" file="/Users/apple/Desktop/CodeIgniter Alternative/php-custom-framework/tests/Core/ContainerTest.php" tests="4" assertions="7" errors="0" failures="0" skipped="0" time="0.005891">
-        <testcase name="testSingletonInstance" file="/Users/apple/Desktop/CodeIgniter Alternative/php-custom-framework/tests/Core/ContainerTest.php" line="46" class="Tests\Core\ContainerTest" classname="Tests.Core.ContainerTest" assertions="1" time="0.004020"/>
-        <testcase name="testBindAndMakeWithClosure" file="/Users/apple/Desktop/CodeIgniter Alternative/php-custom-framework/tests/Core/ContainerTest.php" line="54" class="Tests\Core\ContainerTest" classname="Tests.Core.ContainerTest" assertions="2" time="0.001069"/>
-        <testcase name="testSingletonBinding" file="/Users/apple/Desktop/CodeIgniter Alternative/php-custom-framework/tests/Core/ContainerTest.php" line="67" class="Tests\Core\ContainerTest" classname="Tests.Core.ContainerTest" assertions="1" time="0.000093"/>
-        <testcase name="testAutoWiring" file="/Users/apple/Desktop/CodeIgniter Alternative/php-custom-framework/tests/Core/ContainerTest.php" line="79" class="Tests\Core\ContainerTest" classname="Tests.Core.ContainerTest" assertions="3" time="0.000709"/>
+  <testsuite name="/Users/apple/Desktop/CodeIgniter Alternative/php-custom-framework/phpunit.xml.dist" tests="14" assertions="20" errors="0" failures="0" skipped="0" time="0.005433">
+    <testsuite name="App" tests="14" assertions="20" errors="0" failures="0" skipped="0" time="0.005433">
+      <testsuite name="Tests\Advanced\AdvancedFeaturesTest" file="/Users/apple/Desktop/CodeIgniter Alternative/php-custom-framework/tests/Advanced/AdvancedFeaturesTest.php" tests="3" assertions="6" errors="0" failures="0" skipped="0" time="0.002331">
+        <testcase name="testEventSystem" file="/Users/apple/Desktop/CodeIgniter Alternative/php-custom-framework/tests/Advanced/AdvancedFeaturesTest.php" line="20" class="Tests\Advanced\AdvancedFeaturesTest" classname="Tests.Advanced.AdvancedFeaturesTest" assertions="3" time="0.001913"/>
+        <testcase name="testEventPriority" file="/Users/apple/Desktop/CodeIgniter Alternative/php-custom-framework/tests/Advanced/AdvancedFeaturesTest.php" line="38" class="Tests\Advanced\AdvancedFeaturesTest" classname="Tests.Advanced.AdvancedFeaturesTest" assertions="1" time="0.000120"/>
+        <testcase name="testCsrfTtl" file="/Users/apple/Desktop/CodeIgniter Alternative/php-custom-framework/tests/Advanced/AdvancedFeaturesTest.php" line="55" class="Tests\Advanced\AdvancedFeaturesTest" classname="Tests.Advanced.AdvancedFeaturesTest" assertions="2" time="0.000299"/>
       </testsuite>
-      <testsuite name="Tests\Core\Middleware\PipelineTest" file="/Users/apple/Desktop/CodeIgniter Alternative/php-custom-framework/tests/Core/Middleware/PipelineTest.php" tests="1" assertions="1" errors="0" failures="0" skipped="0" time="0.000226">
-        <testcase name="testPipelineExecution" file="/Users/apple/Desktop/CodeIgniter Alternative/php-custom-framework/tests/Core/Middleware/PipelineTest.php" line="29" class="Tests\Core\Middleware\PipelineTest" classname="Tests.Core.Middleware.PipelineTest" assertions="1" time="0.000226"/>
+      <testsuite name="Tests\Core\ContainerTest" file="/Users/apple/Desktop/CodeIgniter Alternative/php-custom-framework/tests/Core/ContainerTest.php" tests="4" assertions="7" errors="0" failures="0" skipped="0" time="0.000887">
+        <testcase name="testSingletonInstance" file="/Users/apple/Desktop/CodeIgniter Alternative/php-custom-framework/tests/Core/ContainerTest.php" line="46" class="Tests\Core\ContainerTest" classname="Tests.Core.ContainerTest" assertions="1" time="0.000277"/>
+        <testcase name="testBindAndMakeWithClosure" file="/Users/apple/Desktop/CodeIgniter Alternative/php-custom-framework/tests/Core/ContainerTest.php" line="54" class="Tests\Core\ContainerTest" classname="Tests.Core.ContainerTest" assertions="2" time="0.000430"/>
+        <testcase name="testSingletonBinding" file="/Users/apple/Desktop/CodeIgniter Alternative/php-custom-framework/tests/Core/ContainerTest.php" line="67" class="Tests\Core\ContainerTest" classname="Tests.Core.ContainerTest" assertions="1" time="0.000091"/>
+        <testcase name="testAutoWiring" file="/Users/apple/Desktop/CodeIgniter Alternative/php-custom-framework/tests/Core/ContainerTest.php" line="79" class="Tests\Core\ContainerTest" classname="Tests.Core.ContainerTest" assertions="3" time="0.000089"/>
       </testsuite>
-      <testsuite name="Tests\Core\RouterTest" file="/Users/apple/Desktop/CodeIgniter Alternative/php-custom-framework/tests/Core/RouterTest.php" tests="4" assertions="4" errors="0" failures="0" skipped="0" time="0.000555">
-        <testcase name="testClosureRoute" file="/Users/apple/Desktop/CodeIgniter Alternative/php-custom-framework/tests/Core/RouterTest.php" line="37" class="Tests\Core\RouterTest" classname="Tests.Core.RouterTest" assertions="1" time="0.000266"/>
-        <testcase name="testControllerRoute" file="/Users/apple/Desktop/CodeIgniter Alternative/php-custom-framework/tests/Core/RouterTest.php" line="50" class="Tests\Core\RouterTest" classname="Tests.Core.RouterTest" assertions="1" time="0.000092"/>
-        <testcase name="testRouteWithParameters" file="/Users/apple/Desktop/CodeIgniter Alternative/php-custom-framework/tests/Core/RouterTest.php" line="61" class="Tests\Core\RouterTest" classname="Tests.Core.RouterTest" assertions="1" time="0.000111"/>
-        <testcase name="testRouteGroupWithPrefix" file="/Users/apple/Desktop/CodeIgniter Alternative/php-custom-framework/tests/Core/RouterTest.php" line="72" class="Tests\Core\RouterTest" classname="Tests.Core.RouterTest" assertions="1" time="0.000087"/>
+      <testsuite name="Tests\Core\Middleware\PipelineTest" file="/Users/apple/Desktop/CodeIgniter Alternative/php-custom-framework/tests/Core/Middleware/PipelineTest.php" tests="1" assertions="1" errors="0" failures="0" skipped="0" time="0.000175">
+        <testcase name="testPipelineExecution" file="/Users/apple/Desktop/CodeIgniter Alternative/php-custom-framework/tests/Core/Middleware/PipelineTest.php" line="29" class="Tests\Core\Middleware\PipelineTest" classname="Tests.Core.Middleware.PipelineTest" assertions="1" time="0.000175"/>
       </testsuite>
-      <testsuite name="Tests\Core\View\EngineTest" file="/Users/apple/Desktop/CodeIgniter Alternative/php-custom-framework/tests/Core/View/EngineTest.php" tests="2" assertions="2" errors="0" failures="0" skipped="0" time="0.001351">
-        <testcase name="testRenderSimpleView" file="/Users/apple/Desktop/CodeIgniter Alternative/php-custom-framework/tests/Core/View/EngineTest.php" line="37" class="Tests\Core\View\EngineTest" classname="Tests.Core.View.EngineTest" assertions="1" time="0.000767"/>
-        <testcase name="testRenderWithLayout" file="/Users/apple/Desktop/CodeIgniter Alternative/php-custom-framework/tests/Core/View/EngineTest.php" line="46" class="Tests\Core\View\EngineTest" classname="Tests.Core.View.EngineTest" assertions="1" time="0.000584"/>
+      <testsuite name="Tests\Core\RouterTest" file="/Users/apple/Desktop/CodeIgniter Alternative/php-custom-framework/tests/Core/RouterTest.php" tests="4" assertions="4" errors="0" failures="0" skipped="0" time="0.000547">
+        <testcase name="testClosureRoute" file="/Users/apple/Desktop/CodeIgniter Alternative/php-custom-framework/tests/Core/RouterTest.php" line="37" class="Tests\Core\RouterTest" classname="Tests.Core.RouterTest" assertions="1" time="0.000276"/>
+        <testcase name="testControllerRoute" file="/Users/apple/Desktop/CodeIgniter Alternative/php-custom-framework/tests/Core/RouterTest.php" line="50" class="Tests\Core\RouterTest" classname="Tests.Core.RouterTest" assertions="1" time="0.000084"/>
+        <testcase name="testRouteWithParameters" file="/Users/apple/Desktop/CodeIgniter Alternative/php-custom-framework/tests/Core/RouterTest.php" line="61" class="Tests\Core\RouterTest" classname="Tests.Core.RouterTest" assertions="1" time="0.000107"/>
+        <testcase name="testRouteGroupWithPrefix" file="/Users/apple/Desktop/CodeIgniter Alternative/php-custom-framework/tests/Core/RouterTest.php" line="72" class="Tests\Core\RouterTest" classname="Tests.Core.RouterTest" assertions="1" time="0.000080"/>
+      </testsuite>
+      <testsuite name="Tests\Core\View\EngineTest" file="/Users/apple/Desktop/CodeIgniter Alternative/php-custom-framework/tests/Core/View/EngineTest.php" tests="2" assertions="2" errors="0" failures="0" skipped="0" time="0.001492">
+        <testcase name="testRenderSimpleView" file="/Users/apple/Desktop/CodeIgniter Alternative/php-custom-framework/tests/Core/View/EngineTest.php" line="37" class="Tests\Core\View\EngineTest" classname="Tests.Core.View.EngineTest" assertions="1" time="0.000978"/>
+        <testcase name="testRenderWithLayout" file="/Users/apple/Desktop/CodeIgniter Alternative/php-custom-framework/tests/Core/View/EngineTest.php" line="46" class="Tests\Core\View\EngineTest" classname="Tests.Core.View.EngineTest" assertions="1" time="0.000515"/>
       </testsuite>
     </testsuite>
   </testsuite>

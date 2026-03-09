@@ -27,7 +27,9 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 require_once 'autoloader.php';
-require_once 'app/Controllers/MigrateController.php';
+if (Env::get('APP_ENV') !== 'production') {
+    require_once 'app/Controllers/MigrateController.php';
+}
 
 use System\Core\Env;
 use System\Core\Debug;

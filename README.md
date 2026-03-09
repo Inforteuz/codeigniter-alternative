@@ -8,14 +8,15 @@ A lightweight and modern MVC framework inspired by CodeIgniter 4, built from scr
 
 - ✅ **MVC Architecture** (Model-View-Controller)
 - ⚙️ **Environment Configuration** via `.env`
-- 💾 **Database Abstraction** using PDO (MySQL & SQLite support)
-- 🔁 **Advanced Router** with Middleware pipeline and Route Groups
-- 🛡️ **Middleware System** for Authentication, CORS, Rate-Limiting, CSRF 
+- 💾 **Database Abstraction** using PDO (MySQL, SQLite & PostgreSQL support)
+- 🔁 **Advanced Router** with Middleware, Route Groups, and **Route Caching**
+- 🛡️ **Middleware System** for Authentication, CORS, Rate-Limiting, CSRF (with TTL)
 - 🔐 **Session Management** (Secure, Centralized Lifecycle)
 - 🐞 **Robust Error Handling & Refactored Error Rendering**
 - 🎨 **Enhanced View Engine** with Extends/Sections and Global Composers
 - 🏗️ **Modern HTTP Tier** with typed Request & Response objects
-- 🛠 **Built-in Developer CLI** (`bin/framework`) for generating code & migrating
+- 📢 **Event System** for decoupled application logic
+- 🛠 **Built-in Developer CLI** (`bin/framework`) for code generation & migrations
 - 🧩 **API-Ready Structure**
 
 ---

@@ -119,6 +119,9 @@ class Database
                 }
                 $dsn = "sqlite:{$dbPath}";
                 $this->connection = new PDO($dsn, null, null, $options);
+            } elseif ($this->driver === 'pgsql') {
+                $dsn = "pgsql:host={$this->host};dbname={$this->dbname};options='--client_encoding={$this->charset}'";
+                $this->connection = new PDO($dsn, $this->username, $this->password, $options);
             } else {
                 $dsn = "mysql:host={$this->host};dbname={$this->dbname};charset={$this->charset}";
                 $this->connection = new PDO($dsn, $this->username, $this->password, $options);
@@ -564,6 +567,12 @@ class Database
     public function getTables()
     {
         try {
+            if ($this->driver === 'pgsql') {
+                $sql = "SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname != 'pg_catalog' AND schemaname != 'information_schema'";
+                $result = $this->fetchAll($sql);
+                return array_column($result, 'tablename');
+            }
+            
             $sql = "SHOW TABLES";
             $result = $this->fetchAll($sql);
             return array_column($result, 'Tables_in_' . $this->dbname);
@@ -582,6 +591,11 @@ class Database
     public function describeTable($tableName)
     {
         try {
+            if ($this->driver === 'pgsql') {
+                $sql = "SELECT column_name, data_type, is_nullable, column_default 
+                        FROM information_schema.columns WHERE table_name = ?";
+                return $this->fetchAll($sql, [$tableName]);
+            }
             $sql = "DESCRIBE {$tableName}";
             return $this->fetchAll($sql);
         } catch (PDOException $e) {

@@ -33,11 +33,26 @@ class Router
 
     protected function loadAppRoutes()
     {
+        $cacheFile = dirname(__DIR__) . '/writable/cache/routes_cache.php';
         $routesFile = dirname(__DIR__) . '/app/Routes/Routes.php';
+
+        // Load from cache in production if enabled
+        if (Env::get('APP_ENV') === 'production' && Env::get('ROUTE_CACHE_ENABLED') === 'true' && file_exists($cacheFile)) {
+            $this->routes = require $cacheFile;
+            return;
+        }
 
         if (file_exists($routesFile)) {
             $router = $this;
             require_once $routesFile;
+
+            // Save to cache if enabled in production
+            if (Env::get('APP_ENV') === 'production' && Env::get('ROUTE_CACHE_ENABLED') === 'true') {
+                if (!is_dir(dirname($cacheFile))) {
+                    mkdir(dirname($cacheFile), 0777, true);
+                }
+                file_put_contents($cacheFile, '<?php return ' . var_export($this->routes, true) . ';');
+            }
 
             if (Env::get('DEBUG_MODE') === 'true') {
                 DebugToolbar::log("Application routes loaded from: {$routesFile}", 'router');

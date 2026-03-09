@@ -59,13 +59,9 @@ class Csrf {
      * Generate and store a CSRF token
      */
     public static function generateToken(): string {
-        if (session_status() === PHP_SESSION_NONE) {
-
-        }
-
-        // Generate a 64-character (32 bytes) random token
         $token = bin2hex(random_bytes(32));
         $_SESSION['csrf_token'] = $token;
+        $_SESSION['csrf_token_time'] = time();
 
         return $token;
     }
@@ -74,13 +70,20 @@ class Csrf {
      * Verify the provided CSRF token against the session token
      */
     public static function verifyToken(string $token): bool {
-        if (session_status() === PHP_SESSION_NONE) {
-
+        if (!isset($_SESSION['csrf_token']) || !isset($_SESSION['csrf_token_time'])) {
+            return false;
         }
 
-        if (isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token)) {
+        // Check TTL (default 1 hour if not set in .env)
+        $ttl = (int) (\System\Core\Env::get('CSRF_TOKEN_LIFETIME', 3600));
+        if (time() - $_SESSION['csrf_token_time'] > $ttl) {
+            unset($_SESSION['csrf_token'], $_SESSION['csrf_token_time']);
+            return false;
+        }
+
+        if (hash_equals($_SESSION['csrf_token'], $token)) {
             // Token matches, remove it from session to prevent reuse
-            unset($_SESSION['csrf_token']);
+            unset($_SESSION['csrf_token'], $_SESSION['csrf_token_time']);
             return true;
         }
 

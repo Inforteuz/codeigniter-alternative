@@ -1323,6 +1323,75 @@ try {
 
 ---
 
+---
+
+## Event System
+
+The framework provides a simple, decoupled `System\Core\Event` system for managing cross-component communication.
+
+### Basic Usage
+
+```php
+use System\Core\Event;
+
+// Register a listener
+Event::listen('user.login', function($user) {
+    log_message("User {$user->email} has logged in.");
+});
+
+// Dispatch an event
+Event::dispatch('user.login', $currentUser);
+```
+
+### Event Priority
+Listeners with higher priority numbers run first (default is 100).
+
+```php
+Event::listen('order.completed', $sendInvoice, 1000); // Runs first
+Event::listen('order.completed', $logOrder, 100);    // Runs later
+```
+
+---
+
+## Route Caching
+
+For production environments, you can enable route caching to speed up request processing by bypassing route file parsing.
+
+### Configuration (.env)
+```env
+APP_ENV=production
+ROUTE_CACHE_ENABLED=true
+```
+
+When enabled, the router serializes the entire route map to `writable/cache/routes_cache.php`.
+
+---
+
+## Security Hardening
+
+### CSRF TTL (Lifetime)
+CSRF tokens now include a configurable lifetime to prevent replay attacks and long-lived unauthorized tokens.
+
+In `.env`:
+```env
+CSRF_TOKEN_LIFETIME=3600  # 1 hour
+```
+
+---
+
+## PostgreSQL Support
+The database layer now supports `pgsql` driver. Adjust your `.env`:
+
+```env
+DB_CONNECTION=pgsql
+DB_HOST=127.0.0.1
+DB_NAME=my_database
+DB_USER=postgres
+DB_PASS=secret
+```
+
+---
+
 ## API Reference
 
 ### BaseController Methods
@@ -1345,6 +1414,7 @@ try {
 | `xssClean($data)` | Clean XSS |
 | `request()` | Get typed Request object |
 | `response()` | Get typed Response object |
+| `dispatch($event, $payload)` | Dispatch a Core Event |
 
 ### BaseModel Methods
 
@@ -1395,7 +1465,7 @@ CodeIgniter Alternative Framework provides a modern, lightweight, and powerful f
 
 - **Documentation**: This guide
 - **Support**: Contact framework author
-- **Version**: 2.5.0
+- **Version**: 3.0.0
 - **License**: MIT
 
 ### Contributing

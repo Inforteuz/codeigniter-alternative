@@ -1,3 +1,8 @@
+Advanced Features (Tests\Advanced\AdvancedFeatures)
+ [x] Event system
+ [x] Event priority
+ [x] Csrf ttl
+
 Container (Tests\Core\Container)
  [x] Singleton instance
  [x] Bind and make with closure
