@@ -12,8 +12,9 @@ A lightweight and modern MVC framework inspired by CodeIgniter 4, built from scr
 - 🔁 **Advanced Router** with Middleware pipeline and Route Groups
 - 🛡️ **Middleware System** for Authentication, CORS, Rate-Limiting, CSRF 
 - 🔐 **Session Management** (Secure, Centralized Lifecycle)
-- 🐞 **Robust Error Handling & Debugging Toolbar**
+- 🐞 **Robust Error Handling & Refactored Error Rendering**
 - 🎨 **Enhanced View Engine** with Extends/Sections and Global Composers
+- 🏗️ **Modern HTTP Tier** with typed Request & Response objects
 - 🛠 **Built-in Developer CLI** (`bin/framework`) for generating code & migrating
 - 🧩 **API-Ready Structure**
 
@@ -61,6 +62,8 @@ project/
 │   ├── BaseController.php  # Parent controller class
 │   ├── BaseModel.php       # Parent model class
 │   ├── Validation.php      # Data Validator
+│   ├── Http/               # Handle HTTP Request & Response objects
+│   ├── Error/              # Decoupled Error Rendering logic
 │   └── ErrorHandler.php    # Global error and exception handling
 ├── bin/                    # Command Line Interface (framework CLI)
 ├── database/               # SQL migrations, seeders, and sqlite DB

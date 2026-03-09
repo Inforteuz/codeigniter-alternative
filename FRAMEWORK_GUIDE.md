@@ -1,6 +1,6 @@
 # CodeIgniter Alternative Framework - Official Guide
 
-**Version:** 2.0.0
+**Version:** 2.5.0
 **Author:** Oyatillo
 **PHP Requirement:** 8.1.9+
 **License:** MIT
@@ -338,7 +338,35 @@ $userModel = $this->model('UserModel');
 $userModel = $this->model('UserModel', 'users');
 ```
 
-#### Request Data
+#### Request Handling (Modern API)
+
+The framework now uses dedicated `System\Http\Request` and `System\Http\Response` objects, accessible via helper methods or properties.
+
+```php
+// Get the Request object
+$request = $this->request();
+
+// Get POST data (filtered)
+$email = $request->post()['email'] ?? null;
+
+// Get Header
+$auth = $request->header('Authorization');
+
+// Get Client IP
+$ip = $request->ip();
+
+// Get the Response object
+$response = $this->response();
+
+// Set status and header
+$response->status(201)->header('X-Custom', 'Value');
+
+// Send JSON and exit
+$response->json(['status' => 'success']);
+```
+
+#### Legacy Data Accessors
+These methods remain available for backward compatibility but internally use the new Request/Response objects.
 
 ```php
 // Get POST data
@@ -499,6 +527,9 @@ class UserModel extends BaseModel
     // Enable soft deletes
     protected $useSoftDeletes = true;
     protected $deletedField = 'deleted_at';
+
+    // NEW: Define searchable fields for security whitelisting
+    protected $searchable = ['name', 'email', 'bio'];
 }
 ```
 
@@ -711,13 +742,34 @@ foreach ($pagination['links'] as $link) {
 }
 ```
 
-#### Search
+#### Search (Security Enhanced)
+
+The `search()` method now uses a whitelist to prevent SQL injection and unauthorized field access.
 
 ```php
-// Search across multiple fields
-$users = $userModel
-    ->search($searchTerm, ['name', 'email', 'phone'])
-    ->get();
+// Search across whitelisted fields specified in the model ($searchable)
+$users = $userModel->search($searchTerm)->get();
+
+// Or search specific whitelisted fields
+$users = $userModel->search($searchTerm, ['name', 'email'])->get();
+```
+
+#### Increment & Decrement
+
+Safely increment or decrement numeric columns with mass-update protection. 
+*Note: A `where()` clause is required to prevent accidental updates to all rows.*
+
+```php
+// Increment a counter
+$userModel->where(['id' => 1])->increment('points', 10);
+
+// Decrement a counter
+$userModel->where(['id' => 1])->decrement('balance', 50.5);
+
+// Increment with additional field updates
+$userModel->where(['id' => 1])->increment('visits', 1, [
+    'last_visit' => date('Y-m-d H:i:s')
+]);
 ```
 
 #### Filtering
@@ -1168,11 +1220,17 @@ Logs are stored in `writable/logs/error_YYYY-MM-DD.log`.
 
 ### Error Pages
 
-Custom error pages in `app/Views/errors/`:
-
 - `404.php` - Not Found
 - `500.php` - Internal Server Error
 - `403.php` - Forbidden
+
+### Decoupled Error Rendering
+Errors are now rendered via `System\Error\ErrorRenderer`, making it easier to maintain themes and return consistent status codes across the application.
+
+```php
+// Internally handled by Router and BaseController
+$this->showError(404, "Page Not Found");
+```
 
 ### Production vs Development
 
@@ -1285,6 +1343,8 @@ try {
 | `uploadFile($field, $ext, $size, $folder)` | Upload file |
 | `sanitizeInput($input, $type)` | Sanitize input |
 | `xssClean($data)` | Clean XSS |
+| `request()` | Get typed Request object |
+| `response()` | Get typed Response object |
 
 ### BaseModel Methods
 
@@ -1306,6 +1366,13 @@ try {
 | `beginTransaction()` | Start transaction |
 | `commit()` | Commit transaction |
 | `rollBack()` | Rollback transaction |
+| `search($term, $fields)` | Search whitelisted fields |
+| `increment($col, $amt, $ext)` | Safe column increment |
+| `decrement($col, $amt)` | Safe column decrement |
+| `withDeleted()` | Include soft-deleted rows |
+| `onlyDeleted()` | Only show soft-deleted rows |
+| `restore($id)` | Restore soft-deleted row |
+| `getSql()` | Get generated SQL (Debug) |
 
 ### Cache Methods
 
@@ -1328,7 +1395,7 @@ CodeIgniter Alternative Framework provides a modern, lightweight, and powerful f
 
 - **Documentation**: This guide
 - **Support**: Contact framework author
-- **Version**: 2.0.0
+- **Version**: 2.5.0
 - **License**: MIT
 
 ### Contributing
