@@ -635,7 +635,7 @@
                 </div>
                 <span class="logo-text">CodeIgniter Alternative</span>
             </div>
-            <div class="version-badge">v2.0.0 - Modern PHP Framework</div>
+            <div class="version-badge">v3.0.0 - Modern PHP Framework</div>
             <p class="tagline">
                 A lightweight, fast, and modern PHP MVC framework designed for developers who value simplicity, performance, and clean code architecture.
             </p>
@@ -924,7 +924,7 @@ $router->group(['AuthMiddleware'], function($router) {
             </div>
             
             <p>Built with ❤️ by <a href="https://inforte.uz" target="_blank">Inforte Team</a></p>
-            <p>&copy; <?php echo date("Y"); ?> CodeIgniter Alternative Framework - Version 2.0.0</p>
+            <p>&copy; <?php echo date("Y"); ?> CodeIgniter Alternative Framework - Version 3.0.0</p>
             
             <div class="system-info">
                 <i class="fas fa-server"></i> PHP <?php echo PHP_VERSION; ?> 
