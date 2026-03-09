@@ -333,13 +333,13 @@
 Request method: <?= htmlspecialchars($_SERVER['REQUEST_METHOD'] ?? 'Unknown') ?>
 Script name: <?= htmlspecialchars($_SERVER['SCRIPT_NAME'] ?? 'Unknown') ?>
 PHP version: <?= PHP_VERSION ?>
-Framework: CodeIgniter Alternative v2.0.0</pre>
+Framework: CodeIgniter Alternative v3.0.0</pre>
             </details>
             <?php endif; ?>
         </div>
 
         <div class="footer">
-            <p>&copy; <?php echo date("Y"); ?> CodeIgniter Alternative Framework - v2.0.0</p>
+            <p>&copy; <?php echo date("Y"); ?> CodeIgniter Alternative Framework - v3.0.0</p>
             <p>Built with passion by <a href="https://inforte.uz" target="_blank">Inforte</a></p>
             <p>PHP <?php echo PHP_VERSION; ?> • Server: <?php echo $_SERVER['SERVER_SOFTWARE'] ?? 'Unknown'; ?></p>
         </div>
@@ -370,4 +370,5 @@ Framework: CodeIgniter Alternative v2.0.0</pre>
         });
     </script>
 </body>
+
 </html>
