@@ -338,14 +338,14 @@
 Request Method: <?= htmlspecialchars($_SERVER['REQUEST_METHOD'] ?? 'Unknown') ?>
 Server Time: <?= date('Y-m-d H:i:s') ?>
 PHP Version: <?= PHP_VERSION ?>
-Framework: CodeIgniter Alternative v2.0.0
+Framework: CodeIgniter Alternative v3.0.0
 Error: Internal Server Error - The server encountered an unexpected condition.</pre>
             </details>
             <?php endif; ?>
         </div>
 
         <div class="footer">
-            <p>&copy; <?php echo date("Y"); ?> CodeIgniter Alternative Framework - v2.0.0</p>
+            <p>&copy; <?php echo date("Y"); ?> CodeIgniter Alternative Framework - v3.0.0</p>
             <p>Built with passion by <a href="https://inforte.uz" target="_blank">Inforte</a></p>
             <p>PHP <?php echo PHP_VERSION; ?> • Server: <?php echo $_SERVER['SERVER_SOFTWARE'] ?? 'Unknown'; ?></p>
         </div>
@@ -378,4 +378,5 @@ Error: Internal Server Error - The server encountered an unexpected condition.</
         });
     </script>
 </body>
+
 </html>
